@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getStudentBoard } from "@/app/actions/student";
@@ -31,8 +30,7 @@ export function EventHome({
   const [busy, setBusy] = useState(false);
   const [updatedAt, setUpdatedAt] = useState("");
   const [banner, setBanner] = useState<TaskRow | null>(null);
-  const [openStory, setOpenStory] = useState(false);
-  const [openBrief, setOpenBrief] = useState(false);
+  const [openNotes, setOpenNotes] = useState(false);
   const [pickedId, setPickedId] = useState<string | null>(null);
 
   const load = useCallback(
@@ -170,12 +168,6 @@ export function EventHome({
           />
         ) : null}
 
-        {eventState.story_md ? (
-          <Fold title="故事設定" open={openStory} onToggle={() => setOpenStory((value) => !value)}>
-            <Md source={eventState.story_md} />
-          </Fold>
-        ) : null}
-
         <div id="current-task">
           {selected && selected.status !== "draft" ? (
             <Card className="hard-shadow overflow-hidden">
@@ -227,67 +219,36 @@ export function EventHome({
           )}
         </div>
 
-        {ordered.length > 0 ? (
-          <section>
-            <h2 className="mb-2 text-xs font-black tracking-[0.2em] text-muted">任務清單</h2>
-            <Card>
-              {ordered.map((task) => {
-                const done = doneIds.has(task.id);
-                const current = task.id === latest?.id;
-                const closed = task.status === "closed";
-                const label = closed
-                  ? "已截止"
-                  : current
-                    ? done
-                      ? "進行中・已完成"
-                      : "進行中"
-                    : done
-                      ? "已完成・可補交"
-                      : "可補交";
-                return (
-                  <button
-                    key={task.id}
-                    type="button"
-                    onClick={() => {
-                      setPickedId(task.id);
-                      document.getElementById("current-task")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    className={`flex w-full items-center gap-3 border-b-2 border-ink px-3.5 py-3 text-left last:border-b-0 ${
-                      current ? "bg-yellow" : selected?.id === task.id ? "bg-card" : ""
-                    }`}
-                  >
-                    <span className="w-10 shrink-0 font-black tracking-wider">
-                      {liveTaskCode(task.id, tasks)}
-                    </span>
-                    <span className="min-w-0 flex-1 font-black leading-snug">
-                      {shortTaskTitle(task.title)}
-                    </span>
-                    <span
-                      className={`shrink-0 border-2 border-ink px-1.5 py-0.5 text-[11px] font-black ${
-                        current ? "bg-ink text-paper" : done ? "bg-card" : ""
-                      }`}
-                    >
-                      {label}
-                    </span>
-                  </button>
-                );
-              })}
-            </Card>
-          </section>
-        ) : null}
-
-        {eventState.briefing_md ? (
-          <Fold title="行前說明" open={openBrief} onToggle={() => setOpenBrief((value) => !value)}>
-            <Md source={eventState.briefing_md} />
+        {eventState.story_md || eventState.briefing_md ? (
+          <Fold
+            title={
+              eventState.story_md && eventState.briefing_md
+                ? "故事與行前說明"
+                : eventState.story_md
+                  ? "故事設定"
+                  : "行前說明"
+            }
+            open={openNotes}
+            onToggle={() => setOpenNotes((value) => !value)}
+          >
+            {eventState.story_md ? (
+              <div>
+                {eventState.briefing_md ? (
+                  <p className="mb-2 text-[11px] font-black tracking-[0.2em] text-muted">故事設定</p>
+                ) : null}
+                <Md source={eventState.story_md} />
+              </div>
+            ) : null}
+            {eventState.briefing_md ? (
+              <div className={eventState.story_md ? "mt-4 border-t-2 border-ink pt-3" : ""}>
+                {eventState.story_md ? (
+                  <p className="mb-2 text-[11px] font-black tracking-[0.2em] text-muted">行前說明</p>
+                ) : null}
+                <Md source={eventState.briefing_md} />
+              </div>
+            ) : null}
           </Fold>
         ) : null}
-
-        <Link
-          href={`/e/${event.slug}/gallery`}
-          className="flex min-h-14 items-center justify-center border-2 border-ink bg-card text-lg font-black"
-        >
-          看看大家拍了什麼
-        </Link>
       </div>
     </div>
   );
@@ -383,13 +344,13 @@ function Fold({
     <Card>
       <button
         type="button"
-        className="flex w-full items-center justify-between px-3.5 py-3 text-left font-black"
+        className="flex w-full items-center justify-between px-3.5 py-2 text-left text-sm font-black"
         onClick={onToggle}
       >
         {title}
         <span className="text-sm text-muted">{open ? "收合" : "展開"}</span>
       </button>
-      {open ? <div className="border-t-2 border-ink px-3.5 py-3">{children}</div> : null}
+        {open ? <div className="border-t-2 border-ink px-3.5 py-3 text-sm">{children}</div> : null}
     </Card>
   );
 }

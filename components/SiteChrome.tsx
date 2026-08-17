@@ -205,7 +205,7 @@ function studentGroups(slug: string): { title: string; links: MenuLink[] }[] {
       title: "",
       links: [
         { href: `/e/${slug}`, label: "任務板", exact: true },
-        { href: `/e/${slug}/gallery`, label: "成果牆" },
+        { href: `/e/${slug}/gallery`, label: "看看大家拍了什麼" },
         { href: `/e/${slug}/join`, label: "登出" },
       ],
     },

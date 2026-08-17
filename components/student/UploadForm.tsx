@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getStudentBoard, uploadSubmission } from "@/app/actions/student";
 import { Button, Card } from "@/components/ui";
@@ -210,14 +209,6 @@ export function UploadForm({
               <Button className="mt-3 min-h-12 text-[15px]" variant="ghost" onClick={startEdit}>
                 改照片或說明
               </Button>
-            ) : null}
-            {!compact ? (
-              <Link
-                href={`/e/${event.slug}/gallery`}
-                className="mt-2 flex min-h-12 items-center justify-center border-2 border-ink bg-ink text-[15px] font-black text-paper"
-              >
-                看看大家拍了什麼
-              </Link>
             ) : null}
           </div>
         </Card>
