@@ -14,45 +14,18 @@ function sameTeam(a: StoredTeam | null, b: StoredTeam | null) {
   return a.teamId === b.teamId && a.studentId === b.studentId && a.studentName === b.studentName;
 }
 
-function dismissKey(id: string) {
-  return `broadcast-dismiss:${id}`;
-}
-
-function readDismissed(id: string) {
-  try {
-    return sessionStorage.getItem(dismissKey(id)) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeDismissed(id: string) {
-  try {
-    sessionStorage.setItem(dismissKey(id), "1");
-  } catch {
-    /* ignore quota */
-  }
-}
-
 export function BroadcastGate({ slug }: { slug: string }) {
   const pathname = usePathname();
   const onJoin = pathname.endsWith("/join");
   const [team, setTeam] = useState<StoredTeam | null>(null);
   const [broadcast, setBroadcast] = useState<BroadcastRow | null>(null);
   const [answered, setAnswered] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const eventIdRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
-  const seenBroadcastId = useRef<string | null>(null);
 
   const applyBroadcast = useCallback((live: BroadcastRow | null, hasAnswered: boolean) => {
-    const nextId = live?.id ?? null;
-    if (seenBroadcastId.current !== nextId) {
-      seenBroadcastId.current = nextId;
-      setDismissed(live && !hasAnswered ? readDismissed(live.id) : false);
-    }
     setBroadcast(live);
     setAnswered(hasAnswered);
   }, []);
@@ -187,11 +160,6 @@ export function BroadcastGate({ slug }: { slug: string }) {
   const live = broadcast;
   const stored = team;
 
-  function dismiss() {
-    writeDismissed(live.id);
-    setDismissed(true);
-  }
-
   async function submit(answer: string) {
     if (busy) return;
     setBusy(true);
@@ -212,19 +180,6 @@ export function BroadcastGate({ slug }: { slug: string }) {
     setAnswered(true);
   }
 
-  if (dismissed) {
-    return (
-      <button
-        type="button"
-        onClick={() => setDismissed(false)}
-        className="fixed right-4 bottom-4 left-4 z-[200] max-w-[540px] border-2 border-ink bg-yellow px-4 py-3 text-left hard-shadow sm:left-auto sm:w-[360px]"
-      >
-        <p className="text-[11px] font-black tracking-[0.18em] text-yellow-deep">老師廣播 ・ 點我回覆</p>
-        <p className="mt-1 line-clamp-2 text-sm font-black">{live.body}</p>
-      </button>
-    );
-  }
-
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-ink/90 p-4 sm:items-center">
       <div className="w-full max-w-[440px] border-2 border-ink bg-yellow p-5 hard-shadow">
@@ -232,6 +187,7 @@ export function BroadcastGate({ slug }: { slug: string }) {
           老師廣播 ・ {broadcastKindLabel(live.kind)}
         </p>
         <h2 className="mt-2 text-[28px] leading-[1.05] font-black">{live.body}</h2>
+        <p className="mt-3 text-sm font-medium">答完才能回到任務。</p>
         {error ? <p className="mt-3 bg-danger px-3 py-2 text-sm font-black text-white">{error}</p> : null}
         <div className="mt-5 space-y-2">
           {live.kind === "ack" ? (
@@ -256,9 +212,6 @@ export function BroadcastGate({ slug }: { slug: string }) {
                 </Button>
               ))
             : null}
-          <Button variant="ghost" disabled={busy} onClick={dismiss}>
-            先回任務
-          </Button>
         </div>
       </div>
     </div>

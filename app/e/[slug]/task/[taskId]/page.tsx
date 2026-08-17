@@ -14,7 +14,7 @@ export default async function TaskPage(props: PageProps<"/e/[slug]/task/[taskId]
 
   return (
     <div className="mx-auto max-w-[540px] px-4 py-6 pb-16">
-      <Link href={`/e/${slug}`} className="inline-block text-sm font-black max-md:pl-11">
+      <Link href={`/e/${slug}`} className="text-sm font-black">
         ← 回任務板
       </Link>
       <p className="mt-4 text-xs font-black tracking-[0.2em] text-muted">

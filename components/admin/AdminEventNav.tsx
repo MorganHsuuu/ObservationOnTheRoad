@@ -14,7 +14,7 @@ export function AdminEventNav({ slug }: { slug: string }) {
   ] as const;
 
   return (
-    <nav className="flex flex-wrap items-center gap-1 border-b-2 border-ink bg-paper py-2 pr-3 pl-14 md:px-3">
+    <nav className="flex flex-wrap items-center gap-1 border-b-2 border-ink bg-paper px-3 py-2">
       <Link href="/admin/events" className="min-h-11 px-2 font-black">
         ← 場次
       </Link>

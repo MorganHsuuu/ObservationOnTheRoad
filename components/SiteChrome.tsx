@@ -25,26 +25,30 @@ export function SiteChrome({ children }: { children: ReactNode }) {
   }, [open]);
 
   const { slug, rail, groups } = useMemo(() => parseNav(pathname), [pathname]);
+  const title = hereLabel(pathname, slug);
 
   return (
-    <div className="min-h-full flex-1">
-      <button
-        type="button"
-        className="fixed top-0 left-0 z-50 flex h-11 w-11 items-center justify-center border-r-2 border-b-2 border-ink bg-yellow"
-        aria-label={open ? "關閉選單" : "打開選單"}
-        aria-expanded={open}
-        onClick={() => setMenuPath(open ? null : pathname)}
-      >
-        <HamburgerIcon open={open} />
-      </button>
-      <div className="pointer-events-none fixed top-11 bottom-0 left-0 z-40 hidden w-11 border-r-2 border-ink bg-paper pt-4 md:flex md:justify-center">
-        <span className="text-[13px] font-black tracking-[0.34em] text-muted [writing-mode:vertical-rl] whitespace-nowrap">
-          {rail}
-        </span>
-      </div>
+    <div className="flex min-h-full flex-1 flex-col">
+      <header className="sticky top-0 z-50 flex h-11 shrink-0 border-b-2 border-ink bg-yellow">
+        <button
+          type="button"
+          className="flex h-11 w-11 shrink-0 items-center justify-center border-r-2 border-ink"
+          aria-label={open ? "關閉選單" : "打開選單"}
+          aria-expanded={open}
+          onClick={() => setMenuPath(open ? null : pathname)}
+        >
+          <HamburgerIcon open={open} />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3">
+          <p className="truncate text-sm font-black tracking-[0.16em]">{title}</p>
+          <p className="hidden truncate text-[11px] font-black tracking-[0.18em] text-yellow-deep sm:block">
+            {rail}
+          </p>
+        </div>
+      </header>
 
       {open ? (
-        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="網站選單">
+        <div className="fixed inset-x-0 top-11 bottom-0 z-[70]" role="dialog" aria-modal="true" aria-label="網站選單">
           <button
             type="button"
             className="absolute inset-0 bg-ink/70"
@@ -52,20 +56,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
             onClick={() => setMenuPath(null)}
           />
           <nav className="relative flex h-full w-[min(86vw,320px)] flex-col border-r-2 border-ink bg-paper">
-            <div className="flex h-11 items-center justify-between border-b-2 border-ink bg-yellow px-3">
-              <span className="text-sm font-black tracking-[0.18em]">選單</span>
-              <button
-                type="button"
-                className="min-h-11 px-2 font-black"
-                onClick={() => setMenuPath(null)}
-              >
-                關閉
-              </button>
-            </div>
             <div className="flex-1 overflow-y-auto px-3 py-4">
-              <p className="mb-3 text-[11px] font-black tracking-[0.2em] text-muted">
-                你在：{hereLabel(pathname, slug)}
-              </p>
               {groups.map((group) => (
                 <section key={group.title} className="mb-5">
                   <h2 className="mb-2 text-[11px] font-black tracking-[0.2em] text-muted">
@@ -80,6 +71,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
                         <Link
                           key={link.href}
                           href={link.href}
+                          onClick={() => setMenuPath(null)}
                           className={`block min-h-12 border-b-2 border-ink px-3 py-3 font-black last:border-b-0 ${
                             active ? "bg-ink text-paper" : ""
                           }`}
@@ -96,7 +88,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      <div className="min-w-0 md:pl-11">{children}</div>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
