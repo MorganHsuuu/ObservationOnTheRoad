@@ -67,7 +67,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/90 p-5"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/90 p-5"
       role="dialog"
       aria-modal="true"
       onClick={(event) => {

@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
-  setEventFlag,
-  setEventStatus,
   setSubmissionFlags,
   setTaskStatus,
 } from "@/app/actions/admin";
@@ -14,12 +12,13 @@ import { adminTaskCodeLabel, currentTask, liveTaskCode, shortTaskTitle, taskStat
 import { formatTaipeiTime } from "@/lib/time";
 import type {
   EventRow,
-  EventStatus,
   SubmissionWithMeta,
   TaskRow,
   TeamRow,
 } from "@/lib/types";
+import { BroadcastHorn } from "@/components/admin/BroadcastPanel";
 import { QrModal } from "@/components/admin/QrModal";
+import { StudentRoster } from "@/components/admin/StudentRoster";
 
 export function AdminConsole({
   event,
@@ -56,6 +55,7 @@ export function AdminConsole({
   const [qrOpen, setQrOpen] = useState(false);
   const [progressTaskId, setProgressTaskId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
+  const [tasksOpen, setTasksOpen] = useState(false);
 
   const published = useMemo(() => currentTask(taskList), [taskList]);
   const nextDraft = useMemo(
@@ -161,19 +161,34 @@ export function AdminConsole({
           offline ? "bg-danger text-white" : published ? "bg-yellow" : "bg-paper"
         }`}
       >
-        <div className={`text-xs font-black tracking-[0.24em] ${offline ? "text-white" : published ? "text-yellow-deep" : "text-muted"}`}>
-          {offline ? "已離線" : published ? "現在發布中" : "尚未發布任務"}
-        </div>
-        <div className="text-[26px] leading-tight font-black">
-          {offline
-            ? "動作不會送出"
-            : published
-              ? `任務 ${liveTaskCode(published.id, taskList)} ${shortTaskTitle(published.title)}`
-              : "按下方按鈕開始"}
-        </div>
-        <div className={`mt-1.5 flex items-center gap-1.5 text-xs font-medium ${offline ? "text-white" : "text-yellow-deep"}`}>
-          <span className={`inline-block h-2 w-2 rounded-full ${offline ? "bg-white" : "bg-[#1B8A3A]"}`} />
-          {offline ? "檢查網路後重試" : `連線正常・${event.title}`}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className={`text-xs font-black tracking-[0.24em] ${offline ? "text-white" : published ? "text-yellow-deep" : "text-muted"}`}>
+              {offline ? "已離線" : published ? "現在發布中" : "尚未發布任務"}
+            </div>
+            <div className="text-[26px] leading-tight font-black">
+              {offline
+                ? "動作不會送出"
+                : published
+                  ? `任務 ${liveTaskCode(published.id, taskList)} ${shortTaskTitle(published.title)}`
+                  : "按下方按鈕開始"}
+            </div>
+            <div className={`mt-1.5 flex items-center gap-1.5 text-xs font-medium ${offline ? "text-white" : "text-yellow-deep"}`}>
+              <span className={`inline-block h-2 w-2 rounded-full ${offline ? "bg-white" : "bg-[#1B8A3A]"}`} />
+              {offline ? "檢查網路後重試" : event.title}
+            </div>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <BroadcastHorn slug={event.slug} eventId={event.id} teams={teams} />
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              className="flex h-11 w-11 items-center justify-center border-2 border-ink bg-card text-sm font-black"
+              aria-label="顯示 QR"
+            >
+              QR
+            </button>
+          </div>
         </div>
       </div>
 
@@ -187,51 +202,35 @@ export function AdminConsole({
       ) : null}
 
       <div className="mx-auto max-w-[540px] px-4">
-        <div className="mt-4 flex flex-wrap gap-2 text-sm font-black">
-          {(["setup", "live", "archived"] as EventStatus[]).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => void setEventStatus(event.slug, status)}
-              className={`min-h-11 border-2 border-ink px-3 ${event.status === status ? "bg-ink text-paper" : "bg-card"}`}
-            >
-              {status === "setup" ? "籌備" : status === "live" ? "進行中" : "封存"}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => void setEventFlag(event.slug, "gallery_public", !event.gallery_public)}
-            className={`min-h-11 border-2 border-ink px-3 ${event.gallery_public ? "bg-ink text-paper" : "bg-card"}`}
-          >
-            成果牆 {event.gallery_public ? "開" : "關"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void setEventFlag(event.slug, "show_public", !event.show_public)}
-            className={`min-h-11 border-2 border-ink px-3 ${event.show_public ? "bg-ink text-paper" : "bg-card"}`}
-          >
-            展覽 {event.show_public ? "開" : "關"}
-          </button>
-        </div>
-
         <Card className="mt-4">
-          <BlockHead title="回傳進度" extra={<span className="text-[13px] font-black">{doneTeamIds.size} / {teams.length} 組已回傳</span>} />
-          <div className="flex flex-wrap gap-2.5 p-4">
+          <div className="flex items-center justify-between border-b-2 border-ink px-3.5 py-2.5">
+            <h2 className="text-[13px] font-black tracking-[0.2em] text-muted">組別</h2>
+            <span className="text-[13px] font-black">{doneTeamIds.size}/{teams.length} 已交</span>
+          </div>
+          <div className="flex flex-wrap gap-2.5 p-3">
             {teams.map((team) => {
               const done = doneTeamIds.has(team.id);
               return (
-                <button key={team.id} type="button" className="w-[46px] bg-transparent p-0 text-center">
+                <div key={team.id} className="w-[42px] text-center">
                   <i
-                    className={`mx-auto mb-1 block h-[34px] w-[34px] rounded-full border-2 border-ink ${done ? "bg-ink" : ""}`}
+                    className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${done ? "bg-ink" : ""}`}
                   />
                   <span className={`text-[11px] font-black ${done ? "text-ink" : "text-muted"}`}>
                     {team.name.replace("第 ", "").replace(" 組", "")}組
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
         </Card>
+
+        <StudentRoster
+          slug={event.slug}
+          eventId={event.id}
+          teams={teams}
+          tasks={taskList}
+          submissions={feed}
+        />
 
         {nextDraft ? (
           <Card className="mt-4">
@@ -261,71 +260,72 @@ export function AdminConsole({
         ) : null}
 
         <Card className="mt-4">
-          <BlockHead
-            title="題目清單"
-            extra={
-              <button
-                type="button"
-                className="min-h-[34px] border-2 border-ink bg-card px-3 text-[15px] font-black"
-                onClick={() => setQrOpen(true)}
-              >
-                顯示 QR
-              </button>
-            }
-          />
-          <div>
-            {taskList.map((task) => (
-              <div key={task.id} className="relative flex items-center gap-2.5 border-b border-[#DEDCD4] px-3.5 py-3 last:border-b-0">
-                <span
-                  className={`border-2 border-ink px-1.5 py-0.5 text-[11px] font-black tracking-wider ${
-                    task.status === "published" ? "bg-ink text-paper" : ""
-                  }`}
-                >
-                  {task.status === "published" ? "已發布" : task.status === "closed" ? "已截止" : "待發布"}
-                </span>
-                <span className="flex-1 font-black">
-                  {adminTaskCodeLabel(task, taskList)} {shortTaskTitle(task.title)}
-                </span>
-                <span className="text-xs font-black text-muted">
-                  {task.status !== "draft"
-                    ? `${feed.filter((item) => item.task_id === task.id).length}/${teams.length}`
-                    : ""}
-                </span>
-                <button
-                  type="button"
-                  className="px-1 text-lg font-black"
-                  aria-label="更多動作"
-                  onClick={() => setMenuId(menuId === task.id ? null : task.id)}
-                >
-                  ⋯
-                </button>
-                {menuId === task.id ? (
-                  <div className="absolute top-12 right-3 z-20 min-w-40 border-2 border-ink bg-card">
-                    <MenuItem
-                      onClick={() => {
-                        setEditing(task);
-                        setMenuId(null);
-                      }}
-                    >
-                      編輯題目
-                    </MenuItem>
-                    {task.status === "published" ? (
-                      <>
-                        <MenuItem onClick={() => void changeStatus(task, "draft")}>收回發布</MenuItem>
-                        <MenuItem onClick={() => void changeStatus(task, "closed")}>截止這一題</MenuItem>
-                      </>
-                    ) : null}
-                    {task.status === "draft" ? (
-                      <MenuItem onClick={() => setConfirm(task)}>發布</MenuItem>
-                    ) : null}
-                    {task.status === "closed" ? (
-                      <MenuItem onClick={() => void changeStatus(task, "published")}>重新開放</MenuItem>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
+            onClick={() => setTasksOpen((value) => !value)}
+          >
+            <span className="text-[13px] font-black tracking-[0.2em] text-muted">題目</span>
+            <span className="text-[13px] font-black">
+              {taskList.length} 題
+              <span className="ml-2 text-muted">{tasksOpen ? "收合" : "展開"}</span>
+            </span>
+          </button>
+          {tasksOpen ? (
+            <div className="border-t-2 border-ink">
+              {taskList.map((task) => (
+                <div key={task.id} className="relative flex items-center gap-2.5 border-b border-[#DEDCD4] px-3.5 py-3 last:border-b-0">
+                  <span
+                    className={`border-2 border-ink px-1.5 py-0.5 text-[11px] font-black tracking-wider ${
+                      task.status === "published" ? "bg-ink text-paper" : ""
+                    }`}
+                  >
+                    {task.status === "published" ? "已發布" : task.status === "closed" ? "已截止" : "待發布"}
+                  </span>
+                  <span className="flex-1 font-black">
+                    {adminTaskCodeLabel(task, taskList)} {shortTaskTitle(task.title)}
+                  </span>
+                  <span className="text-xs font-black text-muted">
+                    {task.status !== "draft"
+                      ? `${feed.filter((item) => item.task_id === task.id).length}/${teams.length}`
+                      : ""}
+                  </span>
+                  <button
+                    type="button"
+                    className="px-1 text-lg font-black"
+                    aria-label="更多動作"
+                    onClick={() => setMenuId(menuId === task.id ? null : task.id)}
+                  >
+                    ⋯
+                  </button>
+                  {menuId === task.id ? (
+                    <div className="absolute top-12 right-3 z-20 min-w-40 border-2 border-ink bg-card">
+                      <MenuItem
+                        onClick={() => {
+                          setEditing(task);
+                          setMenuId(null);
+                        }}
+                      >
+                        編輯題目
+                      </MenuItem>
+                      {task.status === "published" ? (
+                        <>
+                          <MenuItem onClick={() => void changeStatus(task, "draft")}>收回發布</MenuItem>
+                          <MenuItem onClick={() => void changeStatus(task, "closed")}>截止這一題</MenuItem>
+                        </>
+                      ) : null}
+                      {task.status === "draft" ? (
+                        <MenuItem onClick={() => setConfirm(task)}>發布</MenuItem>
+                      ) : null}
+                      {task.status === "closed" ? (
+                        <MenuItem onClick={() => void changeStatus(task, "published")}>重新開放</MenuItem>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </Card>
 
         <Card className="mt-4">
@@ -342,7 +342,7 @@ export function AdminConsole({
               +{pendingNew} 張新照片 ↑
             </button>
           ) : null}
-          <div>
+          <div className="max-h-72 overflow-y-auto">
             {feed.map((item) => (
               <div key={item.id} className="flex items-start gap-2.5 border-b border-[#DEDCD4] px-3.5 py-2.5 last:border-b-0">
                 <div className="h-[52px] w-[52px] shrink-0 overflow-hidden border-2 border-ink bg-[#DEDCD4]">

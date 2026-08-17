@@ -2,7 +2,14 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeTeamCode, isTeamCode, sanitizeStudentId, sanitizeStudentName } from "@/lib/team-code";
-import type { ActionResult, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
+import type {
+  ActionResult,
+  BroadcastKind,
+  BroadcastRow,
+  StoredTeam,
+  SubmissionRow,
+  TaskRow,
+} from "@/lib/types";
 
 export async function joinTeam(
   slug: string,
@@ -35,6 +42,17 @@ export async function joinTeam(
     .maybeSingle();
   if (error) return { ok: false, error: "連線出了問題，再試一次" };
   if (!team) return { ok: false, error: "找不到這個組別，跟老師確認一下？" };
+
+  await supabase.from("event_participants").upsert(
+    {
+      event_id: event.id,
+      team_id: team.id,
+      student_id: studentId,
+      student_name: studentName,
+      last_seen_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id,student_id" },
+  );
 
   return {
     ok: true,
@@ -113,12 +131,6 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
     .eq("slug", slug)
     .maybeSingle();
   if (!event) return { ok: false, error: "找不到這個活動" };
-  if (event.status === "archived") {
-    return { ok: false, error: "活動已結束，不能再上傳" };
-  }
-  if (event.status !== "live") {
-    await supabase.from("events").update({ status: "live" }).eq("id", event.id);
-  }
 
   const { data: task } = await supabase
     .from("tasks")
@@ -129,6 +141,9 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   if (!task) return { ok: false, error: "找不到這個任務" };
   if (task.status !== "published") {
     return { ok: false, error: "這個任務已經截止囉" };
+  }
+  if (event.status !== "live") {
+    await supabase.from("events").update({ status: "live" }).eq("id", event.id);
   }
   if (task.requires_caption && caption.length === 0) {
     return { ok: false, error: "寫一句話再說說你為什麼拍它" };
@@ -210,4 +225,124 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   }
 
   return { ok: true, data: { id: inserted.id } };
+}
+
+export async function touchPresence(
+  slug: string,
+  input: { teamId: string; studentId: string; studentName: string },
+): Promise<ActionResult> {
+  const studentId = sanitizeStudentId(input.studentId);
+  const studentName = sanitizeStudentName(input.studentName);
+  if (!studentId || !studentName) return { ok: false, error: "請重新加入組別" };
+
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到這個活動" };
+
+  const { error } = await supabase.from("event_participants").upsert(
+    {
+      event_id: event.id,
+      team_id: input.teamId,
+      student_id: studentId,
+      student_name: studentName,
+      last_seen_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id,student_id" },
+  );
+  if (error) return { ok: false, error: "連線出了問題，再試一次" };
+  return { ok: true, data: undefined };
+}
+
+export async function getStudentBroadcast(slug: string, studentId: string) {
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false as const, error: "找不到這個活動" };
+
+  const { data: broadcast } = await supabase
+    .from("broadcasts")
+    .select("*")
+    .eq("event_id", event.id)
+    .eq("status", "live")
+    .maybeSingle();
+
+  if (!broadcast) {
+    return { ok: true as const, data: { broadcast: null, answered: false as const, answer: null } };
+  }
+
+  const { data: response } = await supabase
+    .from("broadcast_responses")
+    .select("*")
+    .eq("broadcast_id", broadcast.id)
+    .eq("student_id", sanitizeStudentId(studentId))
+    .maybeSingle();
+
+  return {
+    ok: true as const,
+    data: {
+      broadcast: broadcast as BroadcastRow,
+      answered: Boolean(response),
+      answer: (response?.answer as string | undefined) ?? null,
+    },
+  };
+}
+
+export async function answerBroadcast(input: {
+  slug: string;
+  broadcastId: string;
+  teamId: string;
+  studentId: string;
+  studentName: string;
+  answer: string;
+}): Promise<ActionResult> {
+  const studentId = sanitizeStudentId(input.studentId);
+  const studentName = sanitizeStudentName(input.studentName);
+  const answer = input.answer.trim();
+  if (!studentId || !studentName || !answer) {
+    return { ok: false, error: "請重新加入組別後再答" };
+  }
+
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", input.slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到這個活動" };
+
+  const { data: broadcast } = await supabase
+    .from("broadcasts")
+    .select("*")
+    .eq("id", input.broadcastId)
+    .eq("event_id", event.id)
+    .eq("status", "live")
+    .maybeSingle();
+  if (!broadcast) return { ok: false, error: "這則廣播已經結束" };
+
+  const kind = broadcast.kind as BroadcastKind;
+  const options = (broadcast.options ?? []) as string[];
+  const valid =
+    (kind === "ack" && answer === "ack") ||
+    (kind === "yesno" && (answer === "yes" || answer === "no")) ||
+    (kind === "choice" && options.includes(answer));
+  if (!valid) return { ok: false, error: "請選一個答案" };
+
+  await supabase.from("event_participants").upsert(
+    {
+      event_id: event.id,
+      team_id: input.teamId,
+      student_id: studentId,
+      student_name: studentName,
+      last_seen_at: new Date().toISOString(),
+    },
+    { onConflict: "event_id,student_id" },
+  );
+
+  const { error } = await supabase.from("broadcast_responses").upsert(
+    {
+      broadcast_id: broadcast.id,
+      team_id: input.teamId,
+      student_id: studentId,
+      student_name: studentName,
+      answer,
+    },
+    { onConflict: "broadcast_id,student_id" },
+  );
+  if (error) return { ok: false, error: "送出失敗，再試一次" };
+  return { ok: true, data: undefined };
 }

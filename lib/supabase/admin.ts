@@ -7,6 +7,9 @@ export function createAdminClient(): SupabaseClient {
     requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (url, init) => fetch(url, { ...init, cache: "no-store" }),
+      },
     },
   );
 }

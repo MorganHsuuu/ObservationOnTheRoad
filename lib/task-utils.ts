@@ -1,5 +1,5 @@
 import { taskCode } from "@/lib/time";
-import type { EventRow, TaskRow } from "@/lib/types";
+import type { TaskRow } from "@/lib/types";
 
 type NumberableTask = Pick<TaskRow, "id" | "order_index"> & {
   status?: TaskRow["status"];
@@ -54,6 +54,7 @@ export function taskStatusLabel(status: TaskRow["status"]) {
   return "草稿";
 }
 
-export function uploadAllowed(task: Pick<TaskRow, "status">, event: Pick<EventRow, "status">) {
-  return task.status === "published" && event.status !== "archived";
+/** 能不能交：只看這題有沒有發布。活動「封存／籌備」不能擋住已發布的題。 */
+export function uploadAllowed(task: Pick<TaskRow, "status">) {
+  return task.status === "published";
 }

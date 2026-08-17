@@ -73,3 +73,36 @@ export type SubmissionWithMeta = SubmissionRow & {
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
+
+export type BroadcastKind = "ack" | "yesno" | "choice";
+export type BroadcastStatus = "live" | "closed";
+
+export type ParticipantRow = {
+  id: string;
+  event_id: string;
+  team_id: string;
+  student_id: string;
+  student_name: string;
+  last_seen_at: string;
+  created_at: string;
+};
+
+export type BroadcastRow = {
+  id: string;
+  event_id: string;
+  kind: BroadcastKind;
+  body: string;
+  options: string[];
+  status: BroadcastStatus;
+  created_at: string;
+};
+
+export type BroadcastResponseRow = {
+  id: string;
+  broadcast_id: string;
+  team_id: string | null;
+  student_id: string;
+  student_name: string;
+  answer: string;
+  created_at: string;
+};

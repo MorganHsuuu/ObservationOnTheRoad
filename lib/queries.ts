@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createAnonServerClient } from "@/lib/supabase/anon";
 import type {
@@ -8,6 +9,7 @@ import type {
 } from "@/lib/types";
 
 export async function getPublicEvent(slug: string) {
+  await connection();
   const supabase = createAnonServerClient();
   const { data, error } = await supabase
     .from("events")

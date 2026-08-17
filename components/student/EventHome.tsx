@@ -87,7 +87,7 @@ export function EventHome({ event }: { event: EventRow }) {
     }
 
     const channel = supabase
-      .channel(`student-tasks:${event.id}`)
+      .channel(`student-board:${event.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "tasks", filter: `event_id=eq.${event.id}` },
@@ -97,6 +97,13 @@ export function EventHome({ event }: { event: EventRow }) {
             setBanner(next);
             navigator.vibrate?.(200);
           }
+          if (team) void load(team);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "events", filter: `id=eq.${event.id}` },
+        () => {
           if (team) void load(team);
         },
       )

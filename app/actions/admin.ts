@@ -5,11 +5,21 @@ import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeTeamCode, isTeamCode } from "@/lib/team-code";
-import type { ActionResult, EventStatus, TaskStatus } from "@/lib/types";
+import type {
+  ActionResult,
+  BroadcastKind,
+  BroadcastResponseRow,
+  BroadcastRow,
+  EventStatus,
+  ParticipantRow,
+  TaskStatus,
+} from "@/lib/types";
 
 function refreshEvent(slug: string) {
   revalidatePath(`/admin/e/${slug}`, "layout");
   revalidatePath(`/e/${slug}`, "layout");
+  revalidatePath(`/e/${slug}`);
+  revalidatePath(`/e/${slug}/task/[taskId]`);
   revalidatePath(`/show/${slug}`);
   revalidatePath("/admin/events");
 }
@@ -424,6 +434,94 @@ export async function setSubmissionFlags(
   await requireAdmin();
   const supabase = createAdminClient();
   const { error } = await supabase.from("submissions").update(flags).eq("id", submissionId);
+  if (error) return { ok: false, error: error.message };
+  refreshEvent(slug);
+  return { ok: true, data: undefined };
+}
+
+export async function getAdminRoom(slug: string) {
+  await requireAdmin();
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false as const, error: "找不到場次" };
+
+  const [{ data: participants }, { data: broadcast }] = await Promise.all([
+    supabase
+      .from("event_participants")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("last_seen_at", { ascending: false }),
+    supabase
+      .from("broadcasts")
+      .select("*")
+      .eq("event_id", event.id)
+      .eq("status", "live")
+      .maybeSingle(),
+  ]);
+
+  let responses: BroadcastResponseRow[] = [];
+  if (broadcast) {
+    const { data } = await supabase
+      .from("broadcast_responses")
+      .select("*")
+      .eq("broadcast_id", broadcast.id)
+      .order("created_at", { ascending: true });
+    responses = (data ?? []) as BroadcastResponseRow[];
+  }
+
+  return {
+    ok: true as const,
+    data: {
+      participants: (participants ?? []) as ParticipantRow[],
+      broadcast: (broadcast as BroadcastRow | null) ?? null,
+      responses,
+    },
+  };
+}
+
+export async function publishBroadcast(
+  slug: string,
+  input: { kind: BroadcastKind; body: string; options?: string[] },
+): Promise<ActionResult<BroadcastRow>> {
+  await requireAdmin();
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "請寫廣播內容" };
+
+  const options = (input.options ?? []).map((item) => item.trim()).filter(Boolean);
+  if (input.kind === "choice") {
+    if (options.length < 2) return { ok: false, error: "選擇題至少兩個選項" };
+    if (options.length > 4) return { ok: false, error: "選擇題最多四個選項" };
+  }
+
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到場次" };
+
+  await supabase.from("broadcasts").update({ status: "closed" }).eq("event_id", event.id).eq("status", "live");
+
+  const { data, error } = await supabase
+    .from("broadcasts")
+    .insert({
+      event_id: event.id,
+      kind: input.kind,
+      body,
+      options: input.kind === "choice" ? options : [],
+      status: "live",
+    })
+    .select("*")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "發布失敗" };
+  refreshEvent(slug);
+  return { ok: true, data: data as BroadcastRow };
+}
+
+export async function closeBroadcast(slug: string, broadcastId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("broadcasts")
+    .update({ status: "closed" })
+    .eq("id", broadcastId);
   if (error) return { ok: false, error: error.message };
   refreshEvent(slug);
   return { ok: true, data: undefined };

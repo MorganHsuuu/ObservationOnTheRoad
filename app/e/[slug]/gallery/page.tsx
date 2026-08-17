@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { GalleryView } from "@/components/gallery/GalleryView";
-import { EmptyState, Rail } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getAdminTeams, getPublicEvent, getPublicSubmissions, getVisibleTasks } from "@/lib/queries";
 import { formatTaipeiDate } from "@/lib/time";
@@ -31,32 +31,25 @@ export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">)
   ]);
 
   return (
-    <div className="md:pl-11">
-      <Rail text="設計課程 ・ 觀察成果" />
-      <div className="mx-auto max-w-[1180px] px-5 pb-24">
-        <header className="relative pt-10 pb-6">
-          <div className="absolute top-8 left-0 hidden rotate-[-16deg] text-[52px] md:block">✈️</div>
-          <h1 className="text-[clamp(48px,11vw,110px)] leading-[0.82] font-black tracking-[-0.02em] md:ml-[70px]">
-            路上觀察<span className="align-[-6px] text-[clamp(34px,6vw,64px)]">👀</span>
-          </h1>
-          <div className="latin mt-1 text-[clamp(22px,4.4vw,44px)] md:ml-[78px]">
-            Observation on the road
-          </div>
-          <dl className="mt-8 flex flex-wrap border-2 border-ink bg-card">
-            <Meta label="場域" value={event.location_name ?? "未定"} />
-            <Meta label="日期" value={formatTaipeiDate(event.event_date)} />
-            <Meta label="任務" value={`${tasks.length} 則`} />
-            <Meta label="觀察紀錄" value={`${submissions.length} 筆`} hit />
-          </dl>
-        </header>
-        <Suspense>
-          <GalleryView
-            submissions={submissions}
-            tasks={tasks}
-            teams={teams.map(({ id, name }) => ({ id, name, event_id: event.id, code: "", members: null }))}
-          />
-        </Suspense>
-      </div>
+    <div className="mx-auto max-w-[1180px] px-5 pb-24">
+      <header className="relative pt-10 pb-6">
+        <div className="absolute top-8 left-0 hidden rotate-[-16deg] text-[52px] md:block">✈️</div>
+        <h1 className="text-[clamp(48px,11vw,110px)] leading-[0.82] font-black tracking-[-0.02em] md:ml-[70px]">
+          路上觀察<span className="align-[-6px] text-[clamp(34px,6vw,64px)]">👀</span>
+        </h1>
+        <div className="latin mt-1 text-[clamp(22px,4.4vw,44px)] md:ml-[78px]">
+          Observation on the road
+        </div>
+        <dl className="mt-8 flex flex-wrap border-2 border-ink bg-card">
+          <Meta label="場域" value={event.location_name ?? "未定"} />
+          <Meta label="日期" value={formatTaipeiDate(event.event_date)} />
+          <Meta label="任務" value={`${tasks.length} 則`} />
+          <Meta label="觀察紀錄" value={`${submissions.length} 筆`} hit />
+        </dl>
+      </header>
+      <Suspense>
+        <GalleryView submissions={submissions} tasks={tasks} teams={teams} />
+      </Suspense>
     </div>
   );
 }

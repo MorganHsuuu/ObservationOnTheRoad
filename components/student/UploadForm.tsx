@@ -32,9 +32,13 @@ export function UploadForm({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [boardEvent, setBoardEvent] = useState<EventRow | null>(null);
+  const [boardTask, setBoardTask] = useState<TaskRow | null>(null);
 
-  const closed = task.status === "closed";
-  const canUpload = uploadAllowed(task, event);
+  const liveEvent = boardEvent ?? event;
+  const liveTask = boardTask?.id === task.id ? boardTask : task;
+  const closed = liveTask.status === "closed";
+  const canUpload = uploadAllowed(liveTask);
 
   useEffect(() => {
     const team = readStoredTeam(event.slug);
@@ -44,6 +48,9 @@ export function UploadForm({
     }
     void getStudentBoard(event.slug, team.teamId).then((result) => {
       if (!result.ok) return;
+      setBoardEvent(result.data.event);
+      const fresh = result.data.tasks.find((item) => item.id === task.id);
+      if (fresh) setBoardTask(fresh);
       setMine(result.data.submissions.filter((item) => item.task_id === task.id));
     });
   }, [event.slug, router, task.id]);
@@ -153,7 +160,7 @@ export function UploadForm({
         >
           再傳一張
         </button>
-        {!compact && event.gallery_public ? (
+        {!compact && liveEvent.gallery_public ? (
           <Link
             href={`/e/${event.slug}/gallery`}
             className="mt-2 flex min-h-14 items-center justify-center border-2 border-ink bg-ink text-lg font-black text-paper"
@@ -280,7 +287,7 @@ export function UploadForm({
       ) : (
         <Card className="px-4 py-5">
           <p className="font-black">
-            {event.status === "archived" ? "活動已結束，不能再上傳" : "活動還沒開始"}
+            {closed ? "這個任務已經截止囉" : "這題還不能交，請重新整理任務板"}
           </p>
         </Card>
       )}

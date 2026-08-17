@@ -44,7 +44,9 @@ export function GalleryView({
       const taskOk =
         taskFilter === "all" || liveTaskCode(item.task.id, tasks) === taskFilter;
       const teamOk =
-        teamFilter === "all" || teamNumber(item.team?.name) === teamFilter;
+        teamFilter === "all" ||
+        item.team?.code === teamFilter ||
+        teamNumber(item.team?.name) === teamFilter;
       return taskOk && teamOk;
     });
     if (featuredFirst && taskFilter === "all" && teamFilter === "all") {
@@ -65,38 +67,36 @@ export function GalleryView({
 
   return (
     <div>
-      <section className="sticky top-0 z-30 border-b-2 border-ink bg-paper py-4" aria-label="篩選觀察紀錄">
-        <FilterRow label="任務">
-          <Chip pressed={taskFilter === "all"} onClick={() => setFilter("task", "all")}>
-            全部
-          </Chip>
-          {tasks.map((task) => (
-            <Chip
-              key={task.id}
-              pressed={taskFilter === liveTaskCode(task.id, tasks)}
-              onClick={() => setFilter("task", liveTaskCode(task.id, tasks))}
-            >
-              {liveTaskCode(task.id, tasks)} {shortTaskTitle(task.title)}
-            </Chip>
-          ))}
-        </FilterRow>
-        <FilterRow label="組別">
-          <Chip pressed={teamFilter === "all"} onClick={() => setFilter("team", "all")}>
-            全部
-          </Chip>
-          {teams.map((team) => (
-            <Chip
-              key={team.id}
-              pressed={teamFilter === teamNumber(team.name)}
-              onClick={() => setFilter("team", teamNumber(team.name))}
-            >
-              {team.name}
-            </Chip>
-          ))}
-        </FilterRow>
-        <p className="mt-3 text-[13px] font-medium text-muted">
-          目前顯示 <b className="text-[15px] font-black text-ink">{list.length}</b> / {submissions.length} 筆觀察
-        </p>
+      <section className="sticky top-0 z-30 border-b-2 border-ink bg-paper py-3" aria-label="篩選觀察紀錄">
+        <div className="flex flex-wrap items-end gap-2">
+          <FilterSelect
+            label="任務"
+            value={taskFilter}
+            onChange={(value) => setFilter("task", value)}
+          >
+            <option value="all">全部任務</option>
+            {tasks.map((task) => (
+              <option key={task.id} value={liveTaskCode(task.id, tasks)}>
+                {liveTaskCode(task.id, tasks)} {shortTaskTitle(task.title)}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect
+            label="組別"
+            value={teamFilter}
+            onChange={(value) => setFilter("team", value)}
+          >
+            <option value="all">全部組別</option>
+            {teams.map((team) => (
+              <option key={team.id} value={team.code || teamNumber(team.name)}>
+                {team.name}
+              </option>
+            ))}
+          </FilterSelect>
+          <p className="ml-auto pb-2 text-[13px] font-medium text-muted">
+            <b className="text-[15px] font-black text-ink">{list.length}</b> / {submissions.length} 筆
+          </p>
+        </div>
       </section>
 
       {list.length === 0 ? (
@@ -119,20 +119,7 @@ export function GalleryView({
                 }
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={sharpImage(item)}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="block w-full border-b-2 border-ink"
-              />
-              <div className="flex items-center justify-between gap-2 bg-ink px-3 py-1.5 text-paper">
-                <span className="text-xs font-black tracking-[0.12em] text-yellow">
-                  任務 {liveTaskCode(item.task.id, tasks)}
-                </span>
-                <span className="text-xs font-black">{item.student_name ?? item.team?.name ?? "未知組別"}</span>
-              </div>
+              <PhotoFrame item={item} tasks={tasks} />
               <div className="px-3.5 pt-3.5 pb-4">
                 <p className="text-[17px] leading-snug font-black">
                   {item.is_featured ? <span className="float-right text-sm">⭐</span> : null}
@@ -149,7 +136,7 @@ export function GalleryView({
 
       {open ? (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/90 p-6"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/90 p-6"
           role="dialog"
           aria-modal="true"
           aria-label="觀察紀錄細節"
@@ -158,16 +145,12 @@ export function GalleryView({
           }}
         >
           <div className="w-full max-w-[520px] border-2 border-ink bg-card">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={open.image_urls[0]} alt="" className="max-h-[60vh] w-full object-contain bg-[#DEDCD4]" />
-            <div className="flex items-center justify-between bg-ink px-3 py-1.5 text-paper">
-              <span className="text-xs font-black text-yellow">
-                任務 {liveTaskCode(open.task.id, tasks)}・{shortTaskTitle(open.task.title)}
-              </span>
-              <span className="text-xs font-black">{open.student_name ?? open.team?.name ?? "未知組別"}</span>
-            </div>
+            <PhotoFrame item={open} tasks={tasks} full />
             <div className="px-3.5 py-3.5">
               <p className="font-black">{open.caption}</p>
+              {open.student_name ? (
+                <p className="mt-1 text-sm font-black text-muted">{open.student_name}</p>
+              ) : null}
               <time className="mt-2 block text-xs text-muted">{formatTaipeiTime(open.created_at)}</time>
             </div>
             <button
@@ -184,35 +167,61 @@ export function GalleryView({
   );
 }
 
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+function PhotoFrame({
+  item,
+  tasks,
+  full = false,
+}: {
+  item: SubmissionWithMeta;
+  tasks: TaskRow[];
+  full?: boolean;
+}) {
+  const code = liveTaskCode(item.task.id, tasks);
+  const title = shortTaskTitle(item.task.title);
+  const team = item.team?.name ?? "未知組別";
+
   return (
-    <div className="mb-2.5 flex items-start gap-3 last:mb-0">
-      <div className="shrink-0 pt-2 text-[13px] font-black tracking-[0.2em] text-muted">{label}</div>
-      <div className="flex flex-wrap gap-2">{children}</div>
+    <div className="relative border-b-2 border-ink bg-[#DEDCD4]">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={full ? item.image_urls[0] || sharpImage(item) : sharpImage(item)}
+        alt={`${title}／${team}`}
+        loading={full ? "eager" : "lazy"}
+        decoding="async"
+        className={full ? "max-h-[56vh] w-full object-contain" : "block w-full"}
+      />
+            <div className="absolute inset-x-0 bottom-0 bg-ink/80 px-3 py-2 text-paper">
+        <p className="text-[11px] font-black tracking-[0.12em] text-yellow">
+          任務 {code}・{title}
+        </p>
+        <p className="text-sm font-black">{team}</p>
+      </div>
     </div>
   );
 }
 
-function Chip({
-  pressed,
+function FilterSelect({
+  label,
+  value,
+  onChange,
   children,
-  onClick,
 }: {
-  pressed: boolean;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
   children: React.ReactNode;
-  onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onClick}
-      className={`border-2 border-ink px-3.5 py-1.5 text-sm font-black ${
-        pressed ? "bg-yellow shadow-[3px_3px_0_var(--ink)]" : "bg-card"
-      }`}
-    >
-      {children}
-    </button>
+    <label className="block min-w-[168px] flex-1">
+      <span className="mb-1 block text-[11px] font-black tracking-[0.2em] text-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="filter-select w-full"
+      >
+        {children}
+      </select>
+    </label>
   );
 }
 
