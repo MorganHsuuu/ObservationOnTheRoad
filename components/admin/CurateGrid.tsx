@@ -33,7 +33,7 @@ export function CurateGrid({
           />
           <div className="p-3">
             <div className="text-xs font-black text-muted">
-              任務 {liveTaskCode(item.task.id, rankTasks)} ・ {item.team?.name}
+              任務 {liveTaskCode(item.task.id, rankTasks)} ・ {item.student_name ?? item.team?.name}
             </div>
             <p className="mt-1 font-black">{item.caption}</p>
             <div className="mt-2 flex gap-2">

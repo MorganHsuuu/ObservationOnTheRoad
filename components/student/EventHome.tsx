@@ -154,8 +154,11 @@ export function EventHome({ event }: { event: EventRow }) {
             </h1>
           </div>
           <div className="shrink-0 text-right">
-            <div className="text-[10px] font-black tracking-[0.18em] text-muted">我的組別</div>
-            <div className="text-sm font-black">{team.teamName}</div>
+            <div className="text-[10px] font-black tracking-[0.18em] text-muted">
+              {team.teamCode} {team.teamName}
+            </div>
+            <div className="text-sm font-black">{team.studentName}</div>
+            <div className="text-[11px] font-black text-muted">{team.studentId}</div>
             <button
               type="button"
               className="text-xs font-black text-muted underline"

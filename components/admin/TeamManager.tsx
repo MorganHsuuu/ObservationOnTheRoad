@@ -25,10 +25,11 @@ export function TeamManager({ slug, teams }: { slug: string; teams: TeamRow[] })
           <input name="name" placeholder="第 7 組" required className="h-14 w-full border-2 border-ink px-3 font-black" />
           <input
             name="code"
-            placeholder="4 碼代碼"
+            placeholder="01"
             required
-            maxLength={4}
-            className="h-14 w-full border-2 border-ink px-3 font-black uppercase"
+            inputMode="numeric"
+            maxLength={2}
+            className="h-14 w-full border-2 border-ink px-3 font-black"
           />
           <input name="members" placeholder="成員（選填）" className="h-12 w-full border-2 border-ink px-3" />
           <Button type="submit">新增組別</Button>

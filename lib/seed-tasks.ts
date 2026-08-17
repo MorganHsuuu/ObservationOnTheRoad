@@ -38,10 +38,10 @@ export const SONGSHAN_SEED_TASKS = [
 ] as const;
 
 export const SONGSHAN_SEED_TEAMS = [
-  { name: "第 1 組", code: "A3K9" },
-  { name: "第 2 組", code: "B7M2" },
-  { name: "第 3 組", code: "C4P8" },
-  { name: "第 4 組", code: "D1Q6" },
-  { name: "第 5 組", code: "E5R3" },
-  { name: "第 6 組", code: "F8T1" },
+  { name: "第 1 組", code: "01" },
+  { name: "第 2 組", code: "02" },
+  { name: "第 3 組", code: "03" },
+  { name: "第 4 組", code: "04" },
+  { name: "第 5 組", code: "05" },
+  { name: "第 6 組", code: "06" },
 ] as const;

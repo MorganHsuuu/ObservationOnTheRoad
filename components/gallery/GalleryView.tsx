@@ -131,7 +131,7 @@ export function GalleryView({
                 <span className="text-xs font-black tracking-[0.12em] text-yellow">
                   任務 {liveTaskCode(item.task.id, tasks)}
                 </span>
-                <span className="text-xs font-black">{item.team?.name ?? "未知組別"}</span>
+                <span className="text-xs font-black">{item.student_name ?? item.team?.name ?? "未知組別"}</span>
               </div>
               <div className="px-3.5 pt-3.5 pb-4">
                 <p className="text-[17px] leading-snug font-black">
@@ -164,7 +164,7 @@ export function GalleryView({
               <span className="text-xs font-black text-yellow">
                 任務 {liveTaskCode(open.task.id, tasks)}・{shortTaskTitle(open.task.title)}
               </span>
-              <span className="text-xs font-black">{open.team?.name ?? "未知組別"}</span>
+              <span className="text-xs font-black">{open.student_name ?? open.team?.name ?? "未知組別"}</span>
             </div>
             <div className="px-3.5 py-3.5">
               <p className="font-black">{open.caption}</p>

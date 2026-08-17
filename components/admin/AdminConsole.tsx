@@ -353,7 +353,9 @@ export function AdminConsole({
                 </div>
                 <div className="flex-1">
                   <div className="text-[11px] font-black tracking-wider text-muted">
-                    {item.team?.name ?? "未知"}・{formatTaipeiTime(item.created_at)}
+                    {item.team?.name ?? "未知"}
+                    {item.student_name ? `・${item.student_name}` : ""}
+                    ・{formatTaipeiTime(item.created_at)}
                   </div>
                   <div className="mt-0.5 text-sm font-black leading-snug">{item.caption}</div>
                 </div>

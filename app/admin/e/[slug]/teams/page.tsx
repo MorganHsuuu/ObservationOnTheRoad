@@ -11,7 +11,7 @@ export default async function TeamsPage(props: PageProps<"/admin/e/[slug]/teams"
     <div className="mx-auto max-w-[640px] px-4 py-6">
       <h1 className="text-4xl font-black">組別</h1>
       <p className="mt-2 mb-6 text-sm font-medium text-muted">
-        學生用 4 碼代碼加入。現場也可以再加一組。
+        學生填組別 01、02、03，再加上學號與姓名就能加入。現場也可以再加一組。
       </p>
       <TeamManager slug={slug} teams={teams} />
     </div>

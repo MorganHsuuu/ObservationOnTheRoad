@@ -19,7 +19,10 @@ export default async function JoinPage(props: PageProps<"/e/[slug]/join">) {
       <h1 className="mt-2 text-[48px] leading-[0.82] font-black tracking-[-0.02em]">
         加入組別
       </h1>
-      <p className="mt-3 mb-8 font-medium">{event.title}</p>
+      <p className="mt-3 font-medium">{event.title}</p>
+      <p className="mt-2 mb-8 text-sm font-medium text-muted">
+        填組別、學號和姓名。這台手機下次會記住。
+      </p>
       <JoinForm slug={slug} />
       <Link href={`/e/${slug}`} className="mt-6 text-center text-sm font-black">
         回活動主頁

@@ -45,6 +45,8 @@ create table submissions (
   image_urls text[] not null default '{}',
   thumb_urls text[] not null default '{}',
   caption text,
+  student_id text,
+  student_name text,
   lat double precision,
   lng double precision,
   is_featured boolean default false,

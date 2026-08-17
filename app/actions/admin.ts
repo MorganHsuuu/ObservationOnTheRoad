@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { finalizeTeamCode, isTeamCode } from "@/lib/team-code";
 import type { ActionResult, EventStatus, TaskStatus } from "@/lib/types";
 
 function refreshEvent(slug: string) {
@@ -372,9 +373,9 @@ export async function upsertTeam(
   input: { id?: string; name: string; code: string; members: string | null },
 ): Promise<ActionResult> {
   await requireAdmin();
-  const code = input.code.trim().toUpperCase();
-  if (!/^[A-Z0-9]{4}$/.test(code) || !input.name.trim()) {
-    return { ok: false, error: "組名必填，代碼要正好 4 碼英數" };
+  const code = finalizeTeamCode(input.code);
+  if (!isTeamCode(code) || !input.name.trim()) {
+    return { ok: false, error: "組名必填，組別請填 01、02、03…" };
   }
   const supabase = createAdminClient();
   const { data: event } = await supabase

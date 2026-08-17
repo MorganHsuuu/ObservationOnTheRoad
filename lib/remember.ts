@@ -1,7 +1,13 @@
 const ADMIN_PASSWORD_KEY = "observe:admin:password";
 
-export function lastCodeKey(slug: string) {
-  return `observe:${slug}:last-code`;
+export type RememberedJoin = {
+  code: string;
+  studentId: string;
+  studentName: string;
+};
+
+export function lastJoinKey(slug: string) {
+  return `observe:${slug}:join`;
 }
 
 export function readRememberedAdminPassword() {
@@ -13,11 +19,27 @@ export function writeRememberedAdminPassword(password: string) {
   localStorage.setItem(ADMIN_PASSWORD_KEY, password);
 }
 
-export function readRememberedTeamCode(slug: string) {
-  if (typeof window === "undefined") return "";
-  return (localStorage.getItem(lastCodeKey(slug)) ?? "").toUpperCase();
+export function readRememberedJoin(slug: string): RememberedJoin {
+  if (typeof window === "undefined") {
+    return { code: "", studentId: "", studentName: "" };
+  }
+  const raw = localStorage.getItem(lastJoinKey(slug));
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Partial<RememberedJoin>;
+      return {
+        code: String(parsed.code ?? "").slice(0, 2),
+        studentId: String(parsed.studentId ?? ""),
+        studentName: String(parsed.studentName ?? ""),
+      };
+    } catch {
+      /* fall through */
+    }
+  }
+  const legacyCode = localStorage.getItem(`observe:${slug}:last-code`) ?? "";
+  return { code: legacyCode.slice(0, 2), studentId: "", studentName: "" };
 }
 
-export function writeRememberedTeamCode(slug: string, code: string) {
-  localStorage.setItem(lastCodeKey(slug), code.trim().toUpperCase());
+export function writeRememberedJoin(slug: string, value: RememberedJoin) {
+  localStorage.setItem(lastJoinKey(slug), JSON.stringify(value));
 }

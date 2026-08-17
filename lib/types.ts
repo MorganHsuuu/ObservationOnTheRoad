@@ -49,6 +49,8 @@ export type SubmissionRow = {
   caption: string | null;
   lat: number | null;
   lng: number | null;
+  student_id: string | null;
+  student_name: string | null;
   is_featured: boolean;
   is_hidden: boolean;
   created_at: string;
@@ -58,6 +60,9 @@ export type StoredTeam = {
   eventSlug: string;
   teamId: string;
   teamName: string;
+  teamCode: string;
+  studentId: string;
+  studentName: string;
 };
 
 export type SubmissionWithMeta = SubmissionRow & {

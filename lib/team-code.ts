@@ -1,0 +1,21 @@
+export function digitsOnly(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+export function finalizeTeamCode(raw: string) {
+  const digits = digitsOnly(raw).slice(0, 2);
+  if (!digits) return "";
+  return digits.padStart(2, "0");
+}
+
+export function isTeamCode(code: string) {
+  return /^\d{2}$/.test(code);
+}
+
+export function sanitizeStudentId(raw: string) {
+  return raw.trim().slice(0, 32);
+}
+
+export function sanitizeStudentName(raw: string) {
+  return raw.trim().slice(0, 40);
+}

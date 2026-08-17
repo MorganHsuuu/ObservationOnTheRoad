@@ -91,6 +91,8 @@ export function UploadForm({
     form.set("taskId", task.id);
     form.set("teamId", team.teamId);
     form.set("caption", caption);
+    form.set("studentId", team.studentId ?? "");
+    form.set("studentName", team.studentName ?? "");
     if (coords.lat != null) form.set("lat", String(coords.lat));
     if (coords.lng != null) form.set("lng", String(coords.lng));
     form.set("full", pair.full);

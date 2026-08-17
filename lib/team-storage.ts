@@ -16,7 +16,14 @@ export function readStoredTeam(slug: string): StoredTeam | null {
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as StoredTeam;
-      if (parsed.teamId && parsed.eventSlug === slug) value = parsed;
+      if (
+        parsed.teamId &&
+        parsed.eventSlug === slug &&
+        parsed.studentId &&
+        parsed.studentName
+      ) {
+        value = parsed;
+      }
     } catch {
       value = null;
     }

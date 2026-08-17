@@ -9,7 +9,7 @@ Next.js App Router、TypeScript、Tailwind、Supabase（Postgres + Storage + Rea
 ## 本機啟動
 
 1. 在 [Supabase](https://supabase.com) 開一個專案。
-2. 到 SQL Editor 執行 `supabase/migrations/001_init.sql`。
+2. 到 SQL Editor 依序執行 `supabase/migrations/001_init.sql`、`002_student_identity.sql`。
 3. 複製環境變數並填入：
 
 ```bash
@@ -40,4 +40,4 @@ npm run dev
 | 老師 | `/admin` |
 | 展覽 | `/show/[slug]` |
 
-學生用 4 碼組別代碼進入，沒有註冊系統。
+學生填組別 `01`、學號和姓名進入，沒有註冊系統。

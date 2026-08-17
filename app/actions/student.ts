@@ -1,15 +1,21 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { finalizeTeamCode, isTeamCode, sanitizeStudentId, sanitizeStudentName } from "@/lib/team-code";
 import type { ActionResult, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 
 export async function joinTeam(
   slug: string,
-  code: string,
+  input: { code: string; studentId: string; studentName: string },
 ): Promise<ActionResult<StoredTeam>> {
-  const normalized = code.trim().toUpperCase();
-  if (!/^[A-Z0-9]{4}$/.test(normalized)) {
-    return { ok: false, error: "找不到這個代碼，跟老師確認一下？" };
+  const code = finalizeTeamCode(input.code);
+  const studentId = sanitizeStudentId(input.studentId);
+  const studentName = sanitizeStudentName(input.studentName);
+  if (!isTeamCode(code)) {
+    return { ok: false, error: "組別請填 01、02、03…" };
+  }
+  if (!studentId || !studentName) {
+    return { ok: false, error: "請填學號和姓名" };
   }
 
   const supabase = createAdminClient();
@@ -19,20 +25,27 @@ export async function joinTeam(
     .eq("slug", slug)
     .maybeSingle();
   if (eventError) return { ok: false, error: "連線出了問題，再試一次" };
-  if (!event) return { ok: false, error: "找不到這個代碼，跟老師確認一下？" };
+  if (!event) return { ok: false, error: "找不到這個組別，跟老師確認一下？" };
 
   const { data: team, error } = await supabase
     .from("teams")
     .select("id, name, code")
     .eq("event_id", event.id)
-    .eq("code", normalized)
+    .eq("code", code)
     .maybeSingle();
   if (error) return { ok: false, error: "連線出了問題，再試一次" };
-  if (!team) return { ok: false, error: "找不到這個代碼，跟老師確認一下？" };
+  if (!team) return { ok: false, error: "找不到這個組別，跟老師確認一下？" };
 
   return {
     ok: true,
-    data: { eventSlug: slug, teamId: team.id, teamName: team.name },
+    data: {
+      eventSlug: slug,
+      teamId: team.id,
+      teamName: team.name,
+      teamCode: team.code,
+      studentId,
+      studentName,
+    },
   };
 }
 
@@ -82,6 +95,8 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   const taskId = String(formData.get("taskId") ?? "");
   const teamId = String(formData.get("teamId") ?? "");
   const caption = String(formData.get("caption") ?? "").trim();
+  const studentId = sanitizeStudentId(String(formData.get("studentId") ?? ""));
+  const studentName = sanitizeStudentName(String(formData.get("studentName") ?? ""));
   const latRaw = formData.get("lat");
   const lngRaw = formData.get("lng");
   const full = formData.get("full");
@@ -154,23 +169,44 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   const lat = latRaw ? Number(latRaw) : null;
   const lng = lngRaw ? Number(lngRaw) : null;
 
-  const { data: inserted, error } = await supabase
-    .from("submissions")
-    .insert({
-      task_id: task.id,
-      team_id: team.id,
-      image_urls: [fullUrl],
-      thumb_urls: [thumbUrl],
-      caption: caption || null,
-      lat: Number.isFinite(lat) ? lat : null,
-      lng: Number.isFinite(lng) ? lng : null,
-    })
-    .select("id")
-    .single();
+  const payload = {
+    task_id: task.id,
+    team_id: team.id,
+    image_urls: [fullUrl],
+    thumb_urls: [thumbUrl],
+    caption: caption || null,
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+    student_id: studentId || null,
+    student_name: studentName || null,
+  };
 
-  if (error || !inserted) {
+  let inserted: { id: string } | null = null;
+  const first = await supabase.from("submissions").insert(payload).select("id").single();
+  if (first.error && /student_id|student_name/.test(first.error.message)) {
+    const retry = await supabase
+      .from("submissions")
+      .insert({
+        task_id: payload.task_id,
+        team_id: payload.team_id,
+        image_urls: payload.image_urls,
+        thumb_urls: payload.thumb_urls,
+        caption: payload.caption,
+        lat: payload.lat,
+        lng: payload.lng,
+      })
+      .select("id")
+      .single();
+    inserted = retry.data;
+    if (retry.error || !inserted) {
+      await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
+      return { ok: false, error: "上傳失敗，再試一次" };
+    }
+  } else if (first.error || !first.data) {
     await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
     return { ok: false, error: "上傳失敗，再試一次" };
+  } else {
+    inserted = first.data;
   }
 
   return { ok: true, data: { id: inserted.id } };
