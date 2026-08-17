@@ -1,24 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { toggleSubmissionLike } from "@/app/actions/student";
 import { EmptyState } from "@/components/ui";
+import { createBrowserClient } from "@/lib/supabase/browser";
 import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
-import { teamLabel } from "@/lib/team-code";
+import { sanitizeStudentId, teamLabel } from "@/lib/team-code";
+import { readStoredTeam } from "@/lib/team-storage";
 import { formatTaipeiTime } from "@/lib/time";
 import { sharpImage } from "@/lib/media";
-import type { SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
+import type { SubmissionLikeRow, SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
 
 export function GalleryView({
+  eventId,
+  eventSlug,
   submissions,
   tasks,
   teams,
+  likes = [],
   featuredFirst = false,
   deepLinkId,
 }: {
+  eventId: string;
+  eventSlug: string;
   submissions: SubmissionWithMeta[];
   tasks: TaskRow[];
   teams: TeamRow[];
+  likes?: SubmissionLikeRow[];
   featuredFirst?: boolean;
   deepLinkId?: string;
 }) {
@@ -27,6 +36,48 @@ export function GalleryView({
   const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? "all");
   const [teamFilter, setTeamFilter] = useState(searchParams.get("team") ?? "all");
   const [openId, setOpenId] = useState(deepLinkId ?? searchParams.get("s"));
+  const [likeRows, setLikeRows] = useState(likes);
+  const [guestId, setGuestId] = useState("");
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const storedLiker = useSyncExternalStore(
+    emptySubscribe,
+    () => readStoredLikerId(eventSlug),
+    () => "",
+  );
+  const likerId = storedLiker || guestId;
+
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    if (!supabase) return;
+    const channel = supabase
+      .channel(`submission-likes:${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "submission_likes",
+          filter: `event_id=eq.${eventId}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as Partial<SubmissionLikeRow> | undefined;
+          const submissionId = row?.submission_id;
+          const studentId = row?.student_id;
+          if (!submissionId || !studentId) return;
+          setLikeRows((current) => {
+            const without = current.filter(
+              (item) => !(item.submission_id === submissionId && item.student_id === studentId),
+            );
+            if (payload.eventType === "DELETE") return without;
+            return [...without, { submission_id: submissionId, student_id: studentId }];
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [eventId]);
 
   function setFilter(key: "task" | "team", value: string) {
     const nextTask = key === "task" ? value : taskFilter;
@@ -66,6 +117,16 @@ export function GalleryView({
     return filtered;
   }, [featuredFirst, labeledAll, taskFilter, teamFilter, tasks]);
 
+  const likeState = useMemo(() => {
+    const counts = new Map<string, number>();
+    const mine = new Set<string>();
+    for (const row of likeRows) {
+      counts.set(row.submission_id, (counts.get(row.submission_id) ?? 0) + 1);
+      if (likerId && row.student_id === likerId) mine.add(row.submission_id);
+    }
+    return { counts, mine };
+  }, [likeRows, likerId]);
+
   const open = list.find((item) => item.id === openId) ?? labeledAll.find((item) => item.id === openId);
 
   useEffect(() => {
@@ -75,6 +136,34 @@ export function GalleryView({
     const img = new Image();
     img.src = full;
   }, [open, openId]);
+
+  async function onLike(submissionId: string) {
+    if (pendingId === submissionId) return;
+    const id = likerId || ensureGuestLiker(eventSlug);
+    if (!likerId) setGuestId(id);
+    const liked = likeState.mine.has(submissionId);
+    setPendingId(submissionId);
+    setLikeRows((current) => {
+      if (liked) {
+        return current.filter(
+          (row) => !(row.submission_id === submissionId && row.student_id === id),
+        );
+      }
+      return [...current, { submission_id: submissionId, student_id: id }];
+    });
+    const result = await toggleSubmissionLike(eventSlug, submissionId, id);
+    setPendingId(null);
+    if (!result.ok) {
+      setLikeRows((current) => {
+        if (liked) {
+          return [...current, { submission_id: submissionId, student_id: id }];
+        }
+        return current.filter(
+          (row) => !(row.submission_id === submissionId && row.student_id === id),
+        );
+      });
+    }
+  }
 
   return (
     <div>
@@ -117,7 +206,7 @@ export function GalleryView({
           {list.map((item) => (
             <article
               key={item.id}
-              className="masonry-item cursor-pointer border-2 border-ink bg-card transition-transform hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[6px_6px_0_var(--ink)]"
+              className="masonry-item flex cursor-pointer border-2 border-ink bg-card transition-transform hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[6px_6px_0_var(--ink)]"
               tabIndex={0}
               onClick={() => setOpenId(item.id)}
               onKeyDown={(event) => {
@@ -130,16 +219,24 @@ export function GalleryView({
                 }
               }}
             >
-              <PhotoFrame item={item} tasks={tasks} />
-              <div className="px-3.5 pt-3.5 pb-4">
-                <p className="text-[17px] leading-snug font-black">
-                  {item.is_featured ? <span className="float-right text-sm">⭐</span> : null}
-                  {item.caption}
-                </p>
-                <time className="mt-2 block text-xs font-medium text-muted">
-                  {formatTaipeiTime(item.created_at)}
-                </time>
+              <div className="min-w-0 flex-1">
+                <PhotoFrame item={item} tasks={tasks} />
+                <div className="px-3.5 pt-3.5 pb-4">
+                  <p className="text-[17px] leading-snug font-black">
+                    {item.is_featured ? <span className="float-right text-sm">⭐</span> : null}
+                    {item.caption}
+                  </p>
+                  <time className="mt-2 block text-xs font-medium text-muted">
+                    {formatTaipeiTime(item.created_at)}
+                  </time>
+                </div>
               </div>
+              <LikeButton
+                liked={likeState.mine.has(item.id)}
+                count={likeState.counts.get(item.id) ?? 0}
+                busy={pendingId === item.id}
+                onToggle={() => void onLike(item.id)}
+              />
             </article>
           ))}
         </div>
@@ -157,12 +254,21 @@ export function GalleryView({
         >
           <div className="w-full max-w-[520px] border-2 border-ink bg-card">
             <PhotoFrame item={open} tasks={tasks} full />
-            <div className="px-3.5 py-3.5">
-              <p className="font-black">{open.caption}</p>
-              {open.student_name ? (
-                <p className="mt-1 text-sm font-black text-muted">{open.student_name}</p>
-              ) : null}
-              <time className="mt-2 block text-xs text-muted">{formatTaipeiTime(open.created_at)}</time>
+            <div className="flex items-start gap-3 px-3.5 py-3.5">
+              <div className="min-w-0 flex-1">
+                <p className="font-black">{open.caption}</p>
+                {open.student_name ? (
+                  <p className="mt-1 text-sm font-black text-muted">{open.student_name}</p>
+                ) : null}
+                <time className="mt-2 block text-xs text-muted">{formatTaipeiTime(open.created_at)}</time>
+              </div>
+              <LikeButton
+                liked={likeState.mine.has(open.id)}
+                count={likeState.counts.get(open.id) ?? 0}
+                busy={pendingId === open.id}
+                onToggle={() => void onLike(open.id)}
+                compact
+              />
             </div>
             <button
               type="button"
@@ -212,6 +318,56 @@ function PhotoFrame({
   );
 }
 
+function LikeButton({
+  liked,
+  count,
+  busy,
+  onToggle,
+  compact = false,
+}: {
+  liked: boolean;
+  count: number;
+  busy: boolean;
+  onToggle: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={liked ? "收回愛心" : "按愛心"}
+      aria-pressed={liked}
+      disabled={busy}
+      className={`${
+        compact
+          ? "flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 border-2 border-ink py-2"
+          : "flex w-[52px] shrink-0 flex-col items-center justify-center gap-1 border-l-2 border-ink"
+      } ${liked ? "bg-yellow" : "bg-card"}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <HeartIcon filled={liked} />
+      <span className="text-[11px] font-black tabular-nums">{count}</span>
+    </button>
+  );
+}
+
+function HeartIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className={`h-6 w-6 ${filled ? "heart-pop" : ""}`} aria-hidden>
+      <path
+        d="M12 20.4S4.8 15.6 2.4 11.4C.4 8.1 1.7 4.2 5.4 3.1c1.9-.6 3.9.2 5.1 1.8 1.2-1.6 3.2-2.4 5.1-1.8 3.7 1.1 5 5 3 8.3C19.2 15.6 12 20.4 12 20.4z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function FilterSelect({
   label,
   value,
@@ -240,4 +396,26 @@ function FilterSelect({
 function teamNumber(name?: string | null) {
   const match = name?.match(/\d+/);
   return match?.[0] ?? name ?? "";
+}
+
+function emptySubscribe() {
+  return () => {};
+}
+
+function likerKey(slug: string) {
+  return `observe:${slug}:liker`;
+}
+
+function readStoredLikerId(slug: string) {
+  const team = readStoredTeam(slug);
+  if (team?.studentId) return sanitizeStudentId(team.studentId);
+  return (localStorage.getItem(likerKey(slug)) ?? "").slice(0, 32);
+}
+
+function ensureGuestLiker(slug: string) {
+  const existing = readStoredLikerId(slug);
+  if (existing) return existing;
+  const next = `g${crypto.randomUUID().replace(/-/g, "").slice(0, 31)}`;
+  localStorage.setItem(likerKey(slug), next);
+  return next;
 }

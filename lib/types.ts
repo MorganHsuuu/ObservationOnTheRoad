@@ -70,6 +70,11 @@ export type SubmissionWithMeta = SubmissionRow & {
   team: Pick<TeamRow, "id" | "name" | "code"> | null;
 };
 
+export type SubmissionLikeRow = {
+  submission_id: string;
+  student_id: string;
+};
+
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };

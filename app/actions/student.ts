@@ -384,3 +384,58 @@ export async function answerBroadcast(input: {
   if (error) return { ok: false, error: "送出失敗，再試一次" };
   return { ok: true, data: undefined };
 }
+
+export async function toggleSubmissionLike(
+  slug: string,
+  submissionId: string,
+  studentId: string,
+): Promise<ActionResult<{ liked: boolean; count: number }>> {
+  const liker = sanitizeStudentId(studentId);
+  if (!liker) return { ok: false, error: "請重新整理後再按一次" };
+
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到這個活動" };
+
+  const { data: submission } = await supabase
+    .from("submissions")
+    .select("id, is_hidden, task_id")
+    .eq("id", submissionId)
+    .maybeSingle();
+  if (!submission || submission.is_hidden) return { ok: false, error: "這張已經不在牆上" };
+
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("id, event_id")
+    .eq("id", submission.task_id)
+    .eq("event_id", event.id)
+    .maybeSingle();
+  if (!task) return { ok: false, error: "這張已經不在牆上" };
+
+  const { data: existing } = await supabase
+    .from("submission_likes")
+    .select("id")
+    .eq("submission_id", submissionId)
+    .eq("student_id", liker)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase.from("submission_likes").delete().eq("id", existing.id);
+    if (error) return { ok: false, error: "按愛心失敗，再試一次" };
+  } else {
+    const { error } = await supabase.from("submission_likes").insert({
+      event_id: event.id,
+      submission_id: submissionId,
+      student_id: liker,
+    });
+    if (error) return { ok: false, error: "按愛心失敗，再試一次" };
+  }
+
+  const { count, error: countError } = await supabase
+    .from("submission_likes")
+    .select("id", { count: "exact", head: true })
+    .eq("submission_id", submissionId);
+  if (countError) return { ok: false, error: "按愛心失敗，再試一次" };
+
+  return { ok: true, data: { liked: !existing, count: count ?? 0 } };
+}

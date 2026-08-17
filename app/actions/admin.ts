@@ -31,6 +31,20 @@ function refreshEvent(slug: string) {
   revalidatePath("/admin/events");
 }
 
+async function reindexTasks(eventId: string) {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("event_id", eventId)
+    .order("order_index", { ascending: true });
+  await Promise.all(
+    (data ?? []).map((row, index) =>
+      supabase.from("tasks").update({ order_index: index + 1 }).eq("id", row.id),
+    ),
+  );
+}
+
 export async function createEvent(formData: FormData): Promise<ActionResult<{ slug: string }>> {
   await requireAdmin();
   const slug = String(formData.get("slug") ?? "")
@@ -221,8 +235,10 @@ export async function upsertTask(
 export async function deleteTask(slug: string, taskId: string): Promise<ActionResult> {
   await requireAdmin();
   const supabase = createAdminClient();
+  const { data: row } = await supabase.from("tasks").select("event_id").eq("id", taskId).maybeSingle();
   const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) return { ok: false, error: error.message };
+  if (row?.event_id) await reindexTasks(row.event_id);
   refreshEvent(slug);
   return { ok: true, data: undefined };
 }

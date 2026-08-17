@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JoinForm } from "@/components/student/JoinForm";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -24,9 +23,6 @@ export default async function JoinPage(props: PageProps<"/e/[slug]/join">) {
         填組別、學號和姓名。這台手機下次會記住。
       </p>
       <JoinForm slug={slug} />
-      <Link href={`/e/${slug}`} className="mt-6 text-center text-sm font-black">
-        回活動主頁
-      </Link>
     </div>
   );
 }

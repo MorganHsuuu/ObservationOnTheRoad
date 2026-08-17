@@ -15,7 +15,7 @@ export function AdminEventNav({ slug }: { slug: string }) {
 
   return (
     <nav className="flex flex-wrap items-center gap-1 border-b-2 border-ink bg-paper px-3 py-2">
-      <Link href="/admin/events" className="min-h-11 px-2 font-black">
+      <Link href="/admin/events" className="inline-flex min-h-11 items-center px-2 font-black leading-none">
         ← 場次
       </Link>
       {links.map(([label, href]) => {
@@ -24,7 +24,7 @@ export function AdminEventNav({ slug }: { slug: string }) {
           <Link
             key={href}
             href={href}
-            className={`min-h-11 px-3 font-black ${active ? "bg-ink text-paper" : ""}`}
+            className={`inline-flex min-h-11 items-center px-3 font-black leading-none ${active ? "bg-ink text-paper" : ""}`}
           >
             {label}
           </Link>

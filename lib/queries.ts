@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createAnonServerClient } from "@/lib/supabase/anon";
 import type {
   EventRow,
+  SubmissionLikeRow,
   SubmissionWithMeta,
   TaskRow,
   TeamRow,
@@ -65,6 +66,16 @@ export async function getPublicSubmissions(eventId: string) {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as SubmissionWithMeta[];
+}
+
+export async function getSubmissionLikes(eventId: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("submission_likes")
+    .select("submission_id, student_id")
+    .eq("event_id", eventId);
+  if (error) throw error;
+  return (data ?? []) as SubmissionLikeRow[];
 }
 
 export async function getAdminEvent(slug: string) {

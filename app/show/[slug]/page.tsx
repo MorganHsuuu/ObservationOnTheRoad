@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { GalleryView } from "@/components/gallery/GalleryView";
 import { EmptyState } from "@/components/ui";
 import { isSupabaseConfigured } from "@/lib/env";
-import { getAdminTeams, getPublicEvent, getPublicSubmissions, getVisibleTasks } from "@/lib/queries";
+import { getAdminTeams, getPublicEvent, getPublicSubmissions, getSubmissionLikes, getVisibleTasks } from "@/lib/queries";
 import { formatTaipeiDate } from "@/lib/time";
 import type { Metadata } from "next";
 
@@ -38,10 +38,11 @@ export default async function ShowPage(props: PageProps<"/show/[slug]">) {
     );
   }
 
-  const [tasks, submissions, teams] = await Promise.all([
+  const [tasks, submissions, teams, likes] = await Promise.all([
     getVisibleTasks(event.id),
     getPublicSubmissions(event.id),
     getAdminTeams(event.id),
+    getSubmissionLikes(event.id),
   ]);
   const deepLink = typeof search.s === "string" ? search.s : undefined;
 
@@ -67,9 +68,12 @@ export default async function ShowPage(props: PageProps<"/show/[slug]">) {
 
       <Suspense>
         <GalleryView
+          eventId={event.id}
+          eventSlug={event.slug}
           submissions={submissions}
           tasks={tasks}
           teams={teams}
+          likes={likes}
           featuredFirst
           deepLinkId={deepLink}
         />

@@ -10,8 +10,8 @@ import { PageLoader } from "@/components/LoadingMark";
 import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
 import { readStoredTeam, clearStoredTeam } from "@/lib/team-storage";
-import { currentTask, liveTaskCode, shortTaskTitle, sortTasksByOrder } from "@/lib/task-utils";
-import { nowTaipeiLabel, taskCode } from "@/lib/time";
+import { boardTaskCode, currentTask, shortTaskTitle, sortTasksByOrder } from "@/lib/task-utils";
+import { nowTaipeiLabel } from "@/lib/time";
 import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function EventHome({
@@ -179,7 +179,7 @@ export function EventHome({
                 >
                   {selected.id === latest?.id ? "目前任務" : selected.status === "closed" ? "已截止" : "可查看"}
                   {" ・ "}
-                  {liveTaskCode(selected.id, tasks)}
+                  {boardTaskCode(selected.id, allTasks)}
                   {doneIds.has(selected.id) ? " ・ 已完成" : ""}
                 </div>
                 <h2 className="text-[26px] leading-tight font-black">
@@ -205,7 +205,7 @@ export function EventHome({
             </Card>
           ) : selected?.status === "draft" ? (
             <Card className="px-4 py-6">
-              <p className="font-black">任務 {taskCode(selected.order_index)} 尚未公布</p>
+              <p className="font-black">任務 {boardTaskCode(selected.id, allTasks)} 尚未公布</p>
               <p className="mt-2 text-sm font-medium text-muted">老師一出題，這裡就會出現。</p>
             </Card>
           ) : (
@@ -298,7 +298,7 @@ function TaskTrack({
             const current = task.id === currentId;
             const selected = task.id === selectedId;
             const locked = task.status === "draft";
-            const code = taskCode(task.order_index);
+            const code = boardTaskCode(task.id, tasks);
             return (
               <button
                 key={task.id}
@@ -312,11 +312,21 @@ function TaskTrack({
                 }
                 onClick={() => onSelect(task.id)}
               >
-                <i
-                  className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${
-                    locked ? "border-dashed" : ""
-                  } ${done ? "bg-ink" : current ? "bg-yellow" : selected ? "bg-card" : ""}`}
-                />
+                <span
+                  className={`mx-auto mb-1 flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 text-[15px] leading-none font-black ${
+                    locked
+                      ? "border-dashed border-ink"
+                      : done
+                        ? "border-ink bg-yellow"
+                        : current
+                          ? "border-dashed border-yellow bg-[#F8E789]"
+                          : selected
+                            ? "border-ink bg-card"
+                            : "border-ink"
+                  }`}
+                >
+                  {done ? "✓" : ""}
+                </span>
                 <span className={`text-[11px] font-black ${done || current || selected ? "text-ink" : "text-muted"}`}>
                   {code}
                 </span>

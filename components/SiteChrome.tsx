@@ -11,12 +11,13 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { readStoredTeam } from "@/lib/team-storage";
+import { clearStoredTeam, readStoredTeam } from "@/lib/team-storage";
 
 type MenuLink = {
   href: string;
   label: string;
   exact?: boolean;
+  logout?: boolean;
 };
 
 type ChromeTools = {
@@ -57,7 +58,10 @@ export function SiteChrome({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const { slug, role, groups } = useMemo(() => parseNav(pathname), [pathname]);
+  const { slug, role, groups } = useMemo(
+    () => parseNav(pathname, Boolean(person)),
+    [pathname, person],
+  );
   const title = hereLabel(pathname, slug);
 
   useEffect(() => {
@@ -136,7 +140,13 @@ export function SiteChrome({ children }: { children: ReactNode }) {
                           <Link
                             key={link.href}
                             href={link.href}
-                            onClick={() => setMenuPath(null)}
+                            onClick={() => {
+                              if (link.logout && slug) {
+                                clearStoredTeam(slug);
+                                setPerson("");
+                              }
+                              setMenuPath(null);
+                            }}
                             className={`block min-h-12 border-b-2 border-ink px-3 py-3 font-black last:border-b-0 ${
                               active ? "bg-ink text-paper" : ""
                             }`}
@@ -181,7 +191,7 @@ function HamburgerIcon({ open }: { open: boolean }) {
   );
 }
 
-function parseNav(pathname: string) {
+function parseNav(pathname: string, joined: boolean) {
   const eventSlug = pathname.match(/^\/e\/([^/]+)/)?.[1];
   const showSlug = pathname.match(/^\/show\/([^/]+)/)?.[1];
   const adminSlug = pathname.match(/^\/admin\/e\/([^/]+)/)?.[1];
@@ -194,19 +204,31 @@ function parseNav(pathname: string) {
     return { slug: showSlug, role: "public" as const, groups: showGroups(showSlug) };
   }
   if (eventSlug) {
-    return { slug: eventSlug, role: "student" as const, groups: studentGroups(eventSlug) };
+    return {
+      slug: eventSlug,
+      role: "student" as const,
+      groups: studentGroups(eventSlug, joined),
+    };
   }
   return { slug: null, role: "public" as const, groups: homeGroups() };
 }
 
-function studentGroups(slug: string): { title: string; links: MenuLink[] }[] {
+function studentGroups(slug: string, joined: boolean): { title: string; links: MenuLink[] }[] {
+  if (!joined) {
+    return [
+      {
+        title: "",
+        links: [{ href: `/e/${slug}/gallery`, label: "成果牆" }],
+      },
+    ];
+  }
   return [
     {
       title: "",
       links: [
         { href: `/e/${slug}`, label: "任務板", exact: true },
-        { href: `/e/${slug}/gallery`, label: "看看大家拍了什麼" },
-        { href: `/e/${slug}/join`, label: "登出" },
+        { href: `/e/${slug}/gallery`, label: "成果牆" },
+        { href: `/e/${slug}/join`, label: "登出", logout: true },
       ],
     },
   ];

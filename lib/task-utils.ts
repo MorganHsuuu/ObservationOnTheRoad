@@ -24,6 +24,12 @@ export function liveTaskCode(taskId: string, tasks: NumberableTask[]) {
   return taskCode(liveTaskNumber(taskId, tasks));
 }
 
+/** 任務板上的題號：依題庫排列重編 01、02、03，刪題留下的空洞不顯示。 */
+export function boardTaskCode(taskId: string, tasks: NumberableTask[]) {
+  const index = sortTasksByOrder(tasks).findIndex((task) => task.id === taskId);
+  return taskCode(index >= 0 ? index + 1 : 0);
+}
+
 export function adminTaskCodeLabel(task: NumberableTask, tasks: NumberableTask[]) {
   if (task.status === "draft") return taskCode(task.order_index);
   const live = liveTaskNumber(task.id, tasks);

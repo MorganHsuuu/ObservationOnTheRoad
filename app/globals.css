@@ -71,6 +71,74 @@
   animation: float-card 0.9s ease-in-out infinite;
 }
 
+.load-stamp {
+  width: min(82vw, 300px);
+}
+
+.load-stamp-svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+  font-family: inherit;
+}
+
+.load-stamp-fill {
+  fill: var(--yellow);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.load-stamp-text {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.load-stamp-core {
+  fill: var(--ink);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+@keyframes done-pop {
+  0% {
+    transform: scale(0.86) rotate(-5deg);
+    opacity: 0.35;
+  }
+  58% {
+    transform: scale(1.07) rotate(2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+.done-pop {
+  animation: done-pop 0.5s ease-out;
+}
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(0.7);
+  }
+  55% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.heart-pop {
+  animation: heart-pop 0.28s ease-out;
+}
+
+.upload-bar {
+  transition: width 280ms ease-out;
+}
+
 button:not(:disabled):active,
 a:active {
   transform: translate(2px, 2px);

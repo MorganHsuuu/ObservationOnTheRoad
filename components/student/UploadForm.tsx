@@ -32,6 +32,8 @@ export function UploadForm({
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
+  const [shownProgress, setShownProgress] = useState(0);
   const [boardTask, setBoardTask] = useState<TaskRow | null>(null);
 
   const liveTask = boardTask?.id === task.id ? boardTask : task;
@@ -64,6 +66,24 @@ export function UploadForm({
     });
   }, [event.slug, router, task.id]);
 
+  useEffect(() => {
+    if (!busy) {
+      if (progress >= 100) setShownProgress(100);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setShownProgress((current) => {
+        if (progress >= 100) return 100;
+        if (current < progress) {
+          return Math.min(progress, current + Math.max(1.2, (progress - current) * 0.22));
+        }
+        if (progress >= 88 && current < 97) return current + 0.35;
+        return current;
+      });
+    }, 70);
+    return () => window.clearInterval(timer);
+  }, [busy, progress]);
+
   function pickFile(next: File | null) {
     if (!next) return;
     setFile(next);
@@ -80,6 +100,7 @@ export function UploadForm({
   function startEdit() {
     setEditing(true);
     setJustSaved(false);
+    setCelebrate(false);
     setCaption(existing?.caption ?? "");
     setPreview(existing ? sharpImage(existing) : null);
     setFile(null);
@@ -141,17 +162,22 @@ export function UploadForm({
     }
     setBusy(true);
     setError("");
+    setProgress(6);
+    setShownProgress(4);
+    const firstTime = !existing;
     let lastError = "上傳失敗，再試一次";
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const result = await submitOnce();
         if (result.ok) {
           setProgress(100);
+          setShownProgress(100);
           setBusy(false);
           setEditing(false);
           setFile(null);
           setPreview(null);
           setJustSaved(true);
+          setCelebrate(firstTime);
           onUploaded?.();
           const team = readStoredTeam(event.slug);
           if (team) {

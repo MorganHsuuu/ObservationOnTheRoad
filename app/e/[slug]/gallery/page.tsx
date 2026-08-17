@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { GalleryView } from "@/components/gallery/GalleryView";
 import { isSupabaseConfigured } from "@/lib/env";
-import { getAdminTeams, getPublicEvent, getPublicSubmissions, getVisibleTasks } from "@/lib/queries";
+import { getAdminTeams, getPublicEvent, getPublicSubmissions, getSubmissionLikes, getVisibleTasks } from "@/lib/queries";
 import { formatTaipeiDate } from "@/lib/time";
 
 export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">) {
@@ -11,10 +11,11 @@ export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">)
   const event = await getPublicEvent(slug);
   if (!event) notFound();
 
-  const [tasks, submissions, teams] = await Promise.all([
+  const [tasks, submissions, teams, likes] = await Promise.all([
     getVisibleTasks(event.id),
     getPublicSubmissions(event.id),
     getAdminTeams(event.id),
+    getSubmissionLikes(event.id),
   ]);
 
   return (
@@ -35,7 +36,14 @@ export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">)
         </dl>
       </header>
       <Suspense>
-        <GalleryView submissions={submissions} tasks={tasks} teams={teams} />
+        <GalleryView
+          eventId={event.id}
+          eventSlug={event.slug}
+          submissions={submissions}
+          tasks={tasks}
+          teams={teams}
+          likes={likes}
+        />
       </Suspense>
     </div>
   );
