@@ -31,3 +31,11 @@ export function sanitizeStudentId(raw: string) {
 export function sanitizeStudentName(raw: string) {
   return raw.trim().slice(0, 40);
 }
+
+export function finalizeEventPin(raw: string) {
+  return digitsOnly(raw).slice(0, 4);
+}
+
+export function isEventPin(pin: string) {
+  return /^\d{4}$/.test(pin);
+}

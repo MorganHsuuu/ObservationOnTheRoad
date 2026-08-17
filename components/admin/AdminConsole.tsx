@@ -1,16 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { getAdminLive, setSubmissionFlags, setTaskStatus } from "@/app/actions/admin";
+import { getAdminLive, getAdminRoom, setSubmissionFlags, setTaskStatus } from "@/app/actions/admin";
 import { TaskEditor } from "@/components/admin/TaskEditor";
+import { TeacherTaskTrack } from "@/components/admin/TeacherTaskTrack";
+import { ProgressPie } from "@/components/ProgressPie";
 import { BlockHead, Button, Card, Modal, Prompt } from "@/components/ui";
 import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
-import { adminTaskCodeLabel, currentTask, liveTaskCode, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
+import { adminTaskCodeLabel, boardTaskCode, currentTask, liveTaskCode, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
 import { teamLabel } from "@/lib/team-code";
+import { teamTaskProgress } from "@/lib/progress";
 import { formatTaipeiTime, nowTaipeiLabel } from "@/lib/time";
 import type {
   EventRow,
+  ParticipantRow,
   SubmissionWithMeta,
   TaskRow,
   TeamRow,
@@ -24,15 +28,18 @@ export function AdminConsole({
   tasks,
   teams,
   submissions,
+  participants,
 }: {
   event: EventRow;
   tasks: TaskRow[];
   teams: TeamRow[];
   submissions: SubmissionWithMeta[];
+  participants: ParticipantRow[];
 }) {
   const [taskList, setTaskList] = useState(tasks);
   const [teamList, setTeamList] = useState(teams);
   const [feed, setFeed] = useState(submissions);
+  const [people, setPeople] = useState(participants);
   const [pendingNew, setPendingNew] = useState(0);
   const [busy, setBusy] = useState(false);
   const [updatedAt, setUpdatedAt] = useState("");
@@ -57,14 +64,13 @@ export function AdminConsole({
   const [qrOpen, setQrOpen] = useState(false);
   const [progressTaskId, setProgressTaskId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
-  const [tasksOpen, setTasksOpen] = useState(false);
 
   const published = useMemo(() => currentTask(taskList), [taskList]);
-  const nextDraft = useMemo(
-    () => taskList.find((task) => task.status === "draft"),
-    [taskList],
-  );
-  const activeId = progressTaskId ?? published?.id;
+  const selected =
+    taskList.find((task) => task.id === (progressTaskId ?? published?.id)) ??
+    taskList[0] ??
+    null;
+  const activeId = selected?.id;
   const doneTeamIds = useMemo(() => {
     if (!activeId) return new Set<string>();
     return new Set(
@@ -74,15 +80,16 @@ export function AdminConsole({
 
   const loadLive = useCallback(async () => {
     setBusy(true);
-    const result = await getAdminLive(event.slug);
+    const [live, room] = await Promise.all([getAdminLive(event.slug), getAdminRoom(event.slug)]);
     setBusy(false);
-    if (!result.ok) {
-      setError(result.error);
+    if (!live.ok) {
+      setError(live.error);
       return;
     }
-    setTaskList(result.data.tasks);
-    setTeamList(result.data.teams);
-    setFeed(result.data.submissions);
+    setTaskList(live.data.tasks);
+    setTeamList(live.data.teams);
+    setFeed(live.data.submissions);
+    if (room.ok) setPeople(room.data.participants);
     setPendingNew(0);
     setUpdatedAt(nowTaipeiLabel());
   }, [event.slug]);
@@ -91,10 +98,6 @@ export function AdminConsole({
     void loadLive();
   }, [loadLive]);
   useChromeTools({ onRefresh: refresh, busy, updatedAt });
-
-  useEffect(() => {
-    setUpdatedAt(nowTaipeiLabel());
-  }, []);
 
   useEffect(() => {
     if (!undo) return;
@@ -227,58 +230,86 @@ export function AdminConsole({
         </div>
       ) : null}
 
-      <div className="mx-auto max-w-[540px] px-4">
-        <Card className="mt-4">
-          <div className="flex items-center justify-between border-b-2 border-ink px-3.5 py-2.5">
-            <h2 className="text-[13px] font-black tracking-[0.2em] text-muted">組別</h2>
-            <span className="text-[13px] font-black">{doneTeamIds.size}/{teamList.length} 已交</span>
-          </div>
-          <div className="flex flex-wrap gap-2.5 p-3">
-            {teamList.map((team) => {
-              const done = doneTeamIds.has(team.id);
-              return (
-                <div key={team.id} className="w-[42px] text-center">
-                  <i
-                    className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${done ? "bg-ink" : ""}`}
-                  />
-                  <span className={`text-[11px] font-black ${done ? "text-ink" : "text-muted"}`}>
-                    {team.code}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        <StudentRoster
-          slug={event.slug}
-          eventId={event.id}
-          teams={teamList}
+      <div className="mx-auto max-w-[640px] px-4">
+        <TeacherTaskTrack
           tasks={taskList}
+          people={people}
           submissions={feed}
-          refreshToken={updatedAt}
+          currentId={published?.id}
+          selectedId={selected?.id}
+          onSelect={(taskId) => {
+            setProgressTaskId(taskId);
+            setMenuId(null);
+          }}
         />
 
-        {nextDraft ? (
+        {selected ? (
           <Card className="mt-4">
-            <BlockHead title="下一題" />
-            <div className="p-4">
-              <div className="text-xs font-black tracking-[0.2em] text-muted">
-                題庫 {adminTaskCodeLabel(nextDraft, taskList)}
+            <div className="flex items-start justify-between gap-3 border-b-2 border-ink px-3.5 py-2.5">
+              <div className="min-w-0">
+                <div className="text-[11px] font-black tracking-[0.2em] text-muted">
+                  {selected.status === "published"
+                    ? "發布中"
+                    : selected.status === "closed"
+                      ? "已截止"
+                      : "尚未公布"}
+                  {" ・ "}
+                  {boardTaskCode(selected.id, taskList)}
+                </div>
+                <h2 className="mt-0.5 text-[22px] leading-tight font-black">
+                  {shortTaskTitle(selected.title)}
+                </h2>
               </div>
-              <h3 className="mt-1 mb-2 text-[22px] font-black">{shortTaskTitle(nextDraft.title)}</h3>
-              <Prompt>{nextDraft.prompt_md}</Prompt>
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  className="px-1 text-lg font-black"
+                  aria-label="更多動作"
+                  onClick={() => setMenuId(menuId === selected.id ? null : selected.id)}
+                >
+                  ⋯
+                </button>
+                {menuId === selected.id ? (
+                  <div className="absolute top-8 right-0 z-20 min-w-40 border-2 border-ink bg-card">
+                    <MenuItem
+                      onClick={() => {
+                        setEditing(selected);
+                        setMenuId(null);
+                      }}
+                    >
+                      編輯題目
+                    </MenuItem>
+                    {selected.status === "published" ? (
+                      <>
+                        <MenuItem onClick={() => void changeStatus(selected, "draft")}>收回發布</MenuItem>
+                        <MenuItem onClick={() => void changeStatus(selected, "closed")}>截止這一題</MenuItem>
+                      </>
+                    ) : null}
+                    {selected.status === "draft" ? (
+                      <MenuItem onClick={() => setConfirm(selected)}>發布</MenuItem>
+                    ) : null}
+                    {selected.status === "closed" ? (
+                      <MenuItem onClick={() => void changeStatus(selected, "published")}>重新開放</MenuItem>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            <div className="p-4">
+              <Prompt>{selected.prompt_md}</Prompt>
+              {selected.status === "draft" ? (
+                <Button
+                  className="mt-4"
+                  disabled={offline || publishing}
+                  onClick={() => setConfirm(selected)}
+                >
+                  發布這一題
+                </Button>
+              ) : null}
               <Button
-                className="mt-4"
-                disabled={offline || publishing}
-                onClick={() => setConfirm(nextDraft)}
-              >
-                發布這一題
-              </Button>
-              <Button
-                className="mt-2 min-h-11 text-[15px]"
-                variant="ghost"
-                onClick={() => setEditing(nextDraft)}
+                className={`${selected.status === "draft" ? "mt-2" : "mt-4"} min-h-11 text-[15px]`}
+                variant={selected.status === "draft" ? "ghost" : "primary"}
+                onClick={() => setEditing(selected)}
               >
                 編輯這一題
               </Button>
@@ -287,73 +318,42 @@ export function AdminConsole({
         ) : null}
 
         <Card className="mt-4">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
-            onClick={() => setTasksOpen((value) => !value)}
-          >
-            <span className="text-[13px] font-black tracking-[0.2em] text-muted">題目</span>
+          <div className="flex items-center justify-between border-b-2 border-ink px-3.5 py-2.5">
+            <h2 className="text-[13px] font-black tracking-[0.2em] text-muted">各組進度</h2>
             <span className="text-[13px] font-black">
-              {taskList.length} 題
-              <span className="ml-2 text-muted">{tasksOpen ? "收合" : "展開"}</span>
+              {doneTeamIds.size}/{teamList.length} 組有人交
             </span>
-          </button>
-          {tasksOpen ? (
-            <div className="border-t-2 border-ink">
-              {taskList.map((task) => (
-                <div key={task.id} className="relative flex items-center gap-2.5 border-b border-[#DEDCD4] px-3.5 py-3 last:border-b-0">
-                  <span
-                    className={`border-2 border-ink px-1.5 py-0.5 text-[11px] font-black tracking-wider ${
-                      task.status === "published" ? "bg-ink text-paper" : ""
-                    }`}
-                  >
-                    {task.status === "published" ? "已發布" : task.status === "closed" ? "已截止" : "待發布"}
-                  </span>
-                  <span className="flex-1 font-black">
-                    {adminTaskCodeLabel(task, taskList)} {shortTaskTitle(task.title)}
-                  </span>
-                  <span className="text-xs font-black text-muted">
-                    {task.status !== "draft"
-                      ? `${feed.filter((item) => item.task_id === task.id).length}/${teamList.length}`
-                      : ""}
-                  </span>
-                  <button
-                    type="button"
-                    className="px-1 text-lg font-black"
-                    aria-label="更多動作"
-                    onClick={() => setMenuId(menuId === task.id ? null : task.id)}
-                  >
-                    ⋯
-                  </button>
-                  {menuId === task.id ? (
-                    <div className="absolute top-12 right-3 z-20 min-w-40 border-2 border-ink bg-card">
-                      <MenuItem
-                        onClick={() => {
-                          setEditing(task);
-                          setMenuId(null);
-                        }}
-                      >
-                        編輯題目
-                      </MenuItem>
-                      {task.status === "published" ? (
-                        <>
-                          <MenuItem onClick={() => void changeStatus(task, "draft")}>收回發布</MenuItem>
-                          <MenuItem onClick={() => void changeStatus(task, "closed")}>截止這一題</MenuItem>
-                        </>
-                      ) : null}
-                      {task.status === "draft" ? (
-                        <MenuItem onClick={() => setConfirm(task)}>發布</MenuItem>
-                      ) : null}
-                      {task.status === "closed" ? (
-                        <MenuItem onClick={() => void changeStatus(task, "published")}>重新開放</MenuItem>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+          </div>
+          {teamList.length === 0 ? (
+            <p className="px-4 py-5 text-sm font-medium text-muted">先到組別頁加上 01、02。</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-3 p-3 sm:grid-cols-4">
+              {teamList.map((team) => {
+                const { done, total } = teamTaskProgress(team.id, activeId ?? null, people, feed);
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                return (
+                  <div key={team.id} className="flex flex-col items-center gap-1.5 py-1">
+                    <ProgressPie done={done} total={total} size={52} current={Boolean(activeId) && doneTeamIds.has(team.id)} />
+                    <span className="text-[13px] font-black">{teamLabel(team)}</span>
+                    <span className="text-[11px] font-black text-muted">
+                      {total > 0 ? `${done}/${total}・${pct}%` : "還沒加入"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-          ) : null}
+          )}
         </Card>
+
+        <StudentRoster
+          slug={event.slug}
+          eventId={event.id}
+          teams={teamList}
+          tasks={taskList}
+          submissions={feed}
+          people={people}
+          refreshToken={updatedAt}
+        />
 
         <Card className="mt-4">
           <BlockHead title="即時回傳" extra={<span className="text-[13px] font-black">{feed.length} 筆</span>} />

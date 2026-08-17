@@ -1,4 +1,5 @@
 import { digitsOnly } from "@/lib/team-code";
+import { eventPinOkKey, eventPinStorageKey } from "@/lib/event-pin";
 
 const ADMIN_PASSWORD_KEY = "observe:admin:password";
 
@@ -44,4 +45,22 @@ export function readRememberedJoin(slug: string): RememberedJoin {
 
 export function writeRememberedJoin(slug: string, value: RememberedJoin) {
   localStorage.setItem(lastJoinKey(slug), JSON.stringify(value));
+}
+
+export function readRememberedEventPin(slug: string) {
+  if (typeof window === "undefined") return "";
+  return digitsOnly(localStorage.getItem(eventPinStorageKey(slug)) ?? "").slice(0, 4);
+}
+
+export function writeRememberedEventPin(slug: string, pin: string) {
+  localStorage.setItem(eventPinStorageKey(slug), digitsOnly(pin).slice(0, 4));
+}
+
+export function readEventPinUnlocked(slug: string) {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(eventPinOkKey(slug)) === "1";
+}
+
+export function writeEventPinUnlocked(slug: string) {
+  localStorage.setItem(eventPinOkKey(slug), "1");
 }

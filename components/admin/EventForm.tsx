@@ -51,10 +51,15 @@ export function EventForm({ event }: { event?: EventRow }) {
       />
       <Field label="地點" name="location_name" defaultValue={event?.location_name ?? ""} />
       <Field label="日期" name="event_date" type="date" defaultValue={event?.event_date ?? ""} />
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="緯度" name="lat" defaultValue={event?.lat?.toString() ?? ""} />
-        <Field label="經度" name="lng" defaultValue={event?.lng?.toString() ?? ""} />
-      </div>
+      <Field
+        label="登入密碼"
+        name="entry_pin"
+        defaultValue={event?.entry_pin ?? ""}
+        placeholder="四碼數字，可不填"
+        inputMode="numeric"
+        maxLength={4}
+        hint="選填。填了學生進場就要輸入這組密碼。"
+      />
       <Area label="故事設定" name="story_md" defaultValue={event?.story_md ?? ""} />
       <Area label="行前說明" name="briefing_md" defaultValue={event?.briefing_md ?? ""} />
       {error ? <p className="bg-danger px-3 py-3 text-sm font-black text-white">{error}</p> : null}
@@ -72,7 +77,10 @@ function Field({
   required,
   disabled,
   placeholder,
+  hint,
   type = "text",
+  inputMode,
+  maxLength,
 }: {
   label: string;
   name: string;
@@ -80,7 +88,10 @@ function Field({
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  hint?: string;
   type?: string;
+  inputMode?: "numeric";
+  maxLength?: number;
 }) {
   return (
     <label className="block">
@@ -92,8 +103,19 @@ function Field({
         required={required}
         disabled={disabled}
         placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        autoComplete="off"
+        onInput={
+          inputMode === "numeric"
+            ? (event) => {
+                event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, maxLength ?? 32);
+              }
+            : undefined
+        }
         className="h-14 w-full border-2 border-ink bg-card px-3 font-black disabled:bg-[#DEDCD4]"
       />
+      {hint ? <span className="mt-1.5 block text-xs font-medium text-muted">{hint}</span> : null}
     </label>
   );
 }

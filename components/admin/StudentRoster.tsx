@@ -14,6 +14,7 @@ export function StudentRoster({
   teams,
   tasks,
   submissions,
+  people,
   refreshToken,
 }: {
   slug: string;
@@ -21,15 +22,16 @@ export function StudentRoster({
   teams: TeamRow[];
   tasks: TaskRow[];
   submissions: SubmissionWithMeta[];
+  people: ParticipantRow[];
   refreshToken?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [people, setPeople] = useState<ParticipantRow[]>([]);
+  const [rowsPeople, setRowsPeople] = useState(people);
 
   const load = useCallback(async () => {
     const result = await getAdminRoom(slug);
     if (!result.ok) return;
-    setPeople(result.data.participants);
+    setRowsPeople(result.data.participants);
   }, [slug]);
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export function StudentRoster({
 
   const rows = useMemo(
     () =>
-      [...people].sort((a, b) => {
+      [...rowsPeople].sort((a, b) => {
         const aOn = Number(isStudentOnline(a.last_seen_at));
         const bOn = Number(isStudentOnline(b.last_seen_at));
         if (bOn !== aOn) return bOn - aOn;
@@ -68,7 +70,7 @@ export function StudentRoster({
         if (aTeam !== bTeam) return aTeam.localeCompare(bTeam);
         return a.student_name.localeCompare(b.student_name, "zh-Hant");
       }),
-    [people, teamMap],
+    [rowsPeople, teamMap],
   );
 
   const onlineCount = rows.filter((item) => isStudentOnline(item.last_seen_at)).length;

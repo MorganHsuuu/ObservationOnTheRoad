@@ -1,11 +1,14 @@
 "use server";
 
+import { mapEventRow } from "@/lib/event-pin";
+import { hasEventPinCookie, setEventPinCookie } from "@/lib/event-pin-server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { finalizeTeamCode, isTeamCode, sanitizeStudentId, sanitizeStudentName } from "@/lib/team-code";
+import { finalizeEventPin, finalizeTeamCode, isTeamCode, sanitizeStudentId, sanitizeStudentName } from "@/lib/team-code";
 import type {
   ActionResult,
   BroadcastKind,
   BroadcastRow,
+  EventRow,
   StoredTeam,
   SubmissionRow,
   TaskRow,
@@ -13,11 +16,12 @@ import type {
 
 export async function joinTeam(
   slug: string,
-  input: { code: string; studentId: string; studentName: string },
+  input: { code: string; studentId: string; studentName: string; pin?: string },
 ): Promise<ActionResult<StoredTeam>> {
   const code = finalizeTeamCode(input.code);
   const studentId = sanitizeStudentId(input.studentId);
   const studentName = sanitizeStudentName(input.studentName);
+  const pin = finalizeEventPin(input.pin ?? "");
   if (!isTeamCode(code)) {
     return { ok: false, error: "組別請填 01、02、03…" };
   }
@@ -28,11 +32,15 @@ export async function joinTeam(
   const supabase = createAdminClient();
   const { data: event, error: eventError } = await supabase
     .from("events")
-    .select("id, slug")
+    .select("id, slug, entry_pin")
     .eq("slug", slug)
     .maybeSingle();
   if (eventError) return { ok: false, error: "連線出了問題，再試一次" };
   if (!event) return { ok: false, error: "找不到這個組別，跟老師確認一下？" };
+  if (event.entry_pin && pin !== event.entry_pin) {
+    return { ok: false, error: "登入密碼不對" };
+  }
+  if (event.entry_pin) await setEventPinCookie(slug);
 
   const { data: team, error } = await supabase
     .from("teams")
@@ -67,6 +75,23 @@ export async function joinTeam(
   };
 }
 
+export async function verifyEventPin(slug: string, pin: string): Promise<ActionResult> {
+  const entered = finalizeEventPin(pin);
+  const supabase = createAdminClient();
+  const { data: event, error } = await supabase
+    .from("events")
+    .select("entry_pin")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) return { ok: false, error: "連線出了問題，再試一次" };
+  if (!event) return { ok: false, error: "找不到這個活動" };
+  if (event.entry_pin && entered !== event.entry_pin) {
+    return { ok: false, error: "密碼不對，再問老師一次" };
+  }
+  await setEventPinCookie(slug);
+  return { ok: true, data: undefined };
+}
+
 export async function getStudentBoard(slug: string, teamId: string) {
   const supabase = createAdminClient();
   const { data: event } = await supabase
@@ -75,6 +100,9 @@ export async function getStudentBoard(slug: string, teamId: string) {
     .eq("slug", slug)
     .maybeSingle();
   if (!event) return { ok: false as const, error: "找不到這個活動" };
+  if (event.entry_pin && !(await hasEventPinCookie(slug))) {
+    return { ok: false as const, error: "請先輸入場次密碼", needsPin: true as const };
+  }
 
   const [{ data: team }, { data: tasks }, { data: submissions }] = await Promise.all([
     supabase.from("teams").select("*").eq("id", teamId).eq("event_id", event.id).maybeSingle(),
@@ -90,7 +118,7 @@ export async function getStudentBoard(slug: string, teamId: string) {
   return {
     ok: true as const,
     data: {
-      event,
+      event: mapEventRow(event as EventRow, false),
       team,
       tasks: ((tasks ?? []) as TaskRow[]).map((task) =>
         task.status === "draft"
@@ -121,6 +149,9 @@ async function resolveLiveUpload(input: { slug: string; taskId: string; teamId: 
     .eq("slug", input.slug)
     .maybeSingle();
   if (!event) return { ok: false as const, error: "找不到這個活動" };
+  if (event.entry_pin && !(await hasEventPinCookie(input.slug))) {
+    return { ok: false as const, error: "請先輸入場次密碼" };
+  }
 
   const { data: task } = await supabase
     .from("tasks")

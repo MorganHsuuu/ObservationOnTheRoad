@@ -4,7 +4,6 @@ import { isAdminAuthed } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getAdminEvents } from "@/lib/queries";
 import { formatTaipeiDate } from "@/lib/time";
-import { SeedButton } from "@/components/admin/SeedButton";
 import { logoutAdmin } from "@/app/actions/auth";
 
 export default async function EventsPage() {
@@ -40,13 +39,12 @@ export default async function EventsPage() {
         <Link href="/admin/events/new" className="min-h-14 border-2 border-ink bg-ink px-5 py-3 font-black text-paper">
           新增場次
         </Link>
-        <SeedButton />
       </div>
 
       <div className="mt-6 space-y-3">
         {events.length === 0 ? (
           <p className="border-2 border-ink bg-card px-4 py-6 font-black">
-            還沒有場次。先建立一筆，或一鍵匯入松山機場示範題庫。
+            還沒有場次。先建立一筆。
           </p>
         ) : (
           events.map((event) => (

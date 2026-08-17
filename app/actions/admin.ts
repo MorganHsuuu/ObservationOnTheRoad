@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { finalizeTeamCode, isTeamCode, teamNameFromCode } from "@/lib/team-code";
+import { finalizeEventPin, finalizeTeamCode, isEventPin, isTeamCode, teamNameFromCode } from "@/lib/team-code";
 import {
   getAdminEvent,
   getAdminSubmissions,
@@ -31,6 +31,13 @@ function refreshEvent(slug: string) {
   revalidatePath("/admin/events");
 }
 
+function parseEntryPin(formData: FormData): ActionResult<string | null> {
+  const pin = finalizeEventPin(String(formData.get("entry_pin") ?? ""));
+  if (!pin) return { ok: true, data: null };
+  if (!isEventPin(pin)) return { ok: false, error: "登入密碼請填四碼數字，或不填" };
+  return { ok: true, data: pin };
+}
+
 async function reindexTasks(eventId: string) {
   const supabase = createAdminClient();
   const { data } = await supabase
@@ -54,17 +61,18 @@ export async function createEvent(formData: FormData): Promise<ActionResult<{ sl
   if (!/^[a-z0-9-]+$/.test(slug) || !title) {
     return { ok: false, error: "請填活動名稱，slug 只能用小寫英文、數字與連字號" };
   }
+  const pin = parseEntryPin(formData);
+  if (!pin.ok) return pin;
 
   const supabase = createAdminClient();
   const { error } = await supabase.from("events").insert({
     slug,
     title,
     location_name: String(formData.get("location_name") ?? "").trim() || null,
-    lat: formData.get("lat") ? Number(formData.get("lat")) : null,
-    lng: formData.get("lng") ? Number(formData.get("lng")) : null,
     event_date: String(formData.get("event_date") ?? "") || null,
     story_md: String(formData.get("story_md") ?? "") || null,
     briefing_md: String(formData.get("briefing_md") ?? "") || null,
+    entry_pin: pin.data,
   });
   if (error) {
     if (error.code === "23505") return { ok: false, error: "這個 slug 已經有人用了" };
@@ -76,17 +84,18 @@ export async function createEvent(formData: FormData): Promise<ActionResult<{ sl
 
 export async function updateEvent(slug: string, formData: FormData): Promise<ActionResult> {
   await requireAdmin();
+  const pin = parseEntryPin(formData);
+  if (!pin.ok) return pin;
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("events")
     .update({
       title: String(formData.get("title") ?? "").trim(),
       location_name: String(formData.get("location_name") ?? "").trim() || null,
-      lat: formData.get("lat") ? Number(formData.get("lat")) : null,
-      lng: formData.get("lng") ? Number(formData.get("lng")) : null,
       event_date: String(formData.get("event_date") ?? "") || null,
       story_md: String(formData.get("story_md") ?? "") || null,
       briefing_md: String(formData.get("briefing_md") ?? "") || null,
+      entry_pin: pin.data,
     })
     .eq("slug", slug);
   if (error) return { ok: false, error: error.message };
@@ -145,6 +154,7 @@ export async function seedSongshanEvent(): Promise<ActionResult<{ slug: string }
         "集合：一樓報到大廳大鐘下。\n請待在公共區域，不要進入管制區。\n每題拍一張、寫一句話。上傳失敗就按再試一次。",
       status: "setup",
       gallery_public: true,
+      entry_pin: "1003",
     })
     .select("id")
     .single();

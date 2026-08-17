@@ -14,6 +14,8 @@ export type EventRow = {
   status: EventStatus;
   gallery_public: boolean;
   show_public: boolean;
+  entry_pin?: string | null;
+  requires_pin: boolean;
   created_at: string;
 };
 

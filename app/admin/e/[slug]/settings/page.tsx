@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { EventForm } from "@/components/admin/EventForm";
-import { SettingsActions } from "@/components/admin/SettingsActions";
 import { getAdminEvent } from "@/lib/queries";
 
 export default async function SettingsPage(props: PageProps<"/admin/e/[slug]/settings">) {
@@ -10,11 +9,8 @@ export default async function SettingsPage(props: PageProps<"/admin/e/[slug]/set
   return (
     <div className="mx-auto max-w-[640px] px-4 py-6">
       <h1 className="text-4xl font-black">設定</h1>
-      <p className="mt-2 mb-6 text-sm text-muted">
-        展覽開關在下面。截止任務、結束活動也放這裡，不放在現場控制台。
-      </p>
+      <p className="mt-2 mb-6 text-sm text-muted">活動名稱、地點、日期和登入密碼。</p>
       <EventForm event={event} />
-      <SettingsActions event={event} />
     </div>
   );
 }

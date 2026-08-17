@@ -1,18 +1,45 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CaretDown, CaretUp } from "@phosphor-icons/react";
 import { deleteTeam, upsertTeam } from "@/app/actions/admin";
+import { ProgressPie } from "@/components/ProgressPie";
 import { Button, Card } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
+import { isStudentOnline } from "@/lib/broadcast";
+import { membersOfTeam, studentDoneTask, teamTaskProgress } from "@/lib/progress";
+import { boardTaskCode, currentTask } from "@/lib/task-utils";
 import { digitsOnly, teamLabel } from "@/lib/team-code";
-import type { TeamRow } from "@/lib/types";
+import type { ParticipantRow, SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
 
-export function TeamManager({ slug, teams }: { slug: string; teams: TeamRow[] }) {
+export function TeamManager({
+  slug,
+  teams,
+  tasks,
+  submissions,
+  participants,
+}: {
+  slug: string;
+  teams: TeamRow[];
+  tasks: TaskRow[];
+  submissions: SubmissionWithMeta[];
+  participants: ParticipantRow[];
+}) {
   const { start, stop } = useNavPending();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
   const busyRef = useRef(false);
-  busyRef.current = busy;
+  const published = currentTask(tasks);
+  const released = useMemo(
+    () => tasks.filter((task) => task.status === "published" || task.status === "closed"),
+    [tasks],
+  );
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   useEffect(() => {
     if (!busyRef.current) return;
@@ -27,7 +54,7 @@ export function TeamManager({ slug, teams }: { slug: string; teams: TeamRow[] })
     start("新增中");
     const result = await upsertTeam(slug, {
       code: String(formData.get("code") ?? ""),
-      members: String(formData.get("members") ?? "") || null,
+      members: null,
     });
     if (!result.ok) {
       setBusy(false);
@@ -50,54 +77,140 @@ export function TeamManager({ slug, teams }: { slug: string; teams: TeamRow[] })
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="p-4">
-        <form action={onCreate} className="space-y-3">
-          <label className="block">
-            <span className="mb-2 block text-xs font-black tracking-[0.2em] text-muted">組別</span>
-            <input
-              name="code"
-              placeholder="01"
-              required
-              disabled={busy}
-              inputMode="numeric"
-              maxLength={2}
-              className="h-14 w-full border-2 border-ink px-3 text-center text-2xl font-black tracking-[0.4em] disabled:opacity-50"
-              onInput={(event) => {
-                const input = event.currentTarget;
-                input.value = digitsOnly(input.value).slice(0, 2);
-              }}
-            />
-          </label>
-          <input
-            name="members"
-            placeholder="成員（選填）"
-            disabled={busy}
-            className="h-12 w-full border-2 border-ink px-3 disabled:opacity-50"
-          />
-          <Button type="submit" disabled={busy}>
-            {busy ? "處理中…" : "新增組別"}
-          </Button>
-        </form>
-        {error ? <p className="mt-3 bg-danger px-3 py-3 font-black text-white">{error}</p> : null}
-      </Card>
+    <div className="space-y-3">
+      {teams.map((team) => {
+        const members = membersOfTeam(participants, team.id);
+        const { done, total } = teamTaskProgress(team.id, published?.id ?? null, participants, submissions);
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        const open = openId === team.id;
+        return (
+          <Card key={team.id}>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+              onClick={() => setOpenId(open ? null : team.id)}
+            >
+              <ProgressPie done={done} total={total} size={48} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-lg font-black">{teamLabel(team)}</span>
+                  <span className="text-xs font-black tracking-[0.16em] text-muted">
+                    代碼 {team.code}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[13px] font-black text-muted">
+                  {total > 0
+                    ? `${members.length} 人・目前題 ${done}/${total}（${pct}%）`
+                    : "還沒有人加入"}
+                </p>
+              </div>
+              {open ? (
+                <CaretUp weight="bold" size={18} className="shrink-0" aria-hidden />
+              ) : (
+                <CaretDown weight="bold" size={18} className="shrink-0" aria-hidden />
+              )}
+            </button>
+            {open ? (
+              <div className="border-t-2 border-ink">
+                {members.length === 0 ? (
+                  <p className="px-3.5 py-4 text-sm font-medium text-muted">
+                    學生用代碼 {team.code} 加入後，進度會出現在這裡。
+                  </p>
+                ) : (
+                  members.map((person) => {
+                    const online = isStudentOnline(person.last_seen_at);
+                    return (
+                      <div
+                        key={person.id}
+                        className="flex items-start gap-3 border-b-2 border-ink px-3.5 py-3 last:border-b-0"
+                      >
+                        <span
+                          className={`mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+                            online ? "bg-[#1B8A3A]" : "bg-[#DEDCD4]"
+                          }`}
+                          title={online ? "在線" : "離線"}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-baseline gap-x-2">
+                            <span className="font-black">{person.student_name}</span>
+                            <span className="text-xs font-black text-muted">{person.student_id}</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {released.length === 0 ? (
+                              <span className="text-xs font-medium text-muted">還沒有發布任務</span>
+                            ) : (
+                              released.map((task) => {
+                                const got = studentDoneTask(submissions, person.student_id, task.id);
+                                return (
+                                  <span
+                                    key={task.id}
+                                    className={`border-2 border-ink px-1.5 py-0.5 text-[11px] font-black ${
+                                      got ? "bg-ink text-paper" : "bg-card text-muted"
+                                    }`}
+                                  >
+                                    {boardTaskCode(task.id, tasks)}
+                                  </span>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div className="flex justify-end px-3.5 py-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className="min-h-11 text-sm font-black text-danger disabled:opacity-50"
+                    onClick={() => void onDelete(team.id)}
+                  >
+                    刪除這一組
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </Card>
+        );
+      })}
 
-      {teams.map((team) => (
-        <Card key={team.id} className="flex items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <div className="text-xl font-black">{teamLabel(team)}</div>
-            {team.members ? <div className="text-sm text-muted">{team.members}</div> : null}
-          </div>
-          <button
-            type="button"
-            disabled={busy}
-            className="min-h-11 font-black disabled:opacity-50"
-            onClick={() => void onDelete(team.id)}
-          >
-            刪除
-          </button>
-        </Card>
-      ))}
+      <Card>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-3.5 py-3 text-left text-sm font-black"
+          onClick={() => setAdding((value) => !value)}
+        >
+          新增組別
+          <span className="text-muted">{adding ? "收合" : "展開"}</span>
+        </button>
+        {adding ? (
+          <form action={onCreate} className="space-y-3 border-t-2 border-ink p-3.5">
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-black tracking-[0.2em] text-muted">代碼</span>
+              <input
+                name="code"
+                placeholder="01"
+                required
+                disabled={busy}
+                inputMode="numeric"
+                maxLength={2}
+                className="h-12 w-24 border-2 border-ink px-3 text-center text-xl font-black tracking-[0.3em] disabled:opacity-50"
+                onInput={(event) => {
+                  const input = event.currentTarget;
+                  input.value = digitsOnly(input.value).slice(0, 2);
+                }}
+              />
+            </label>
+            <Button type="submit" className="min-h-12 text-[15px]" disabled={busy}>
+              {busy ? "處理中…" : "加入這一組"}
+            </Button>
+            {error ? <p className="bg-danger px-3 py-2 text-sm font-black text-white">{error}</p> : null}
+          </form>
+        ) : error ? (
+          <p className="border-t-2 border-ink bg-danger px-3 py-2 text-sm font-black text-white">{error}</p>
+        ) : null}
+      </Card>
     </div>
   );
 }

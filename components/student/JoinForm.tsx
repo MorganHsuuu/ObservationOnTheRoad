@@ -3,13 +3,27 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { joinTeam } from "@/app/actions/student";
+import { EventPinForm } from "@/components/student/EventPinForm";
 import { writeStoredTeam } from "@/lib/team-storage";
 import { Button } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
-import { readRememberedJoin, writeRememberedJoin } from "@/lib/remember";
+import {
+  readEventPinUnlocked,
+  readRememberedEventPin,
+  readRememberedJoin,
+  writeRememberedJoin,
+} from "@/lib/remember";
 import { digitsOnly, finalizeTeamCode } from "@/lib/team-code";
 
-export function JoinForm({ slug }: { slug: string }) {
+export function JoinForm({
+  slug,
+  requiresPin = false,
+  pinUnlocked = false,
+}: {
+  slug: string;
+  requiresPin?: boolean;
+  pinUnlocked?: boolean;
+}) {
   const router = useRouter();
   const { start, stop } = useNavPending();
   const [code, setCode] = useState("");
@@ -17,13 +31,20 @@ export function JoinForm({ slug }: { slug: string }) {
   const [studentName, setStudentName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [unlocked, setUnlocked] = useState(!requiresPin || pinUnlocked);
 
   useEffect(() => {
-    const saved = readRememberedJoin(slug);
-    if (saved.code) setCode(saved.code);
-    if (saved.studentId) setStudentId(saved.studentId);
-    if (saved.studentName) setStudentName(saved.studentName);
-  }, [slug]);
+    const timer = window.setTimeout(() => {
+      const saved = readRememberedJoin(slug);
+      if (saved.code) setCode(saved.code);
+      if (saved.studentId) setStudentId(saved.studentId);
+      if (saved.studentName) setStudentName(saved.studentName);
+      if (requiresPin && (pinUnlocked || readEventPinUnlocked(slug))) {
+        setUnlocked(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pinUnlocked, requiresPin, slug]);
 
   const ready =
     finalizeTeamCode(code).length === 2 && studentId.trim().length > 0 && studentName.trim().length > 0;
@@ -33,11 +54,17 @@ export function JoinForm({ slug }: { slug: string }) {
     setBusy(true);
     setError("");
     start("確認中");
-    const result = await joinTeam(slug, { code, studentId, studentName });
+    const result = await joinTeam(slug, {
+      code,
+      studentId,
+      studentName,
+      pin: readRememberedEventPin(slug),
+    });
     if (!result.ok) {
       setBusy(false);
       stop();
       setError(result.error);
+      if (result.error.includes("密碼")) setUnlocked(false);
       return;
     }
     writeStoredTeam(result.data);
@@ -48,6 +75,21 @@ export function JoinForm({ slug }: { slug: string }) {
     });
     start("進入任務板");
     router.replace(`/e/${slug}`);
+  }
+
+  if (requiresPin && !unlocked) {
+    return (
+      <div>
+        <p className="mb-6 text-sm font-medium text-muted">先輸入老師給的四碼密碼。</p>
+        <EventPinForm
+          slug={slug}
+          onVerified={() => {
+            setUnlocked(true);
+            router.refresh();
+          }}
+        />
+      </div>
+    );
   }
 
   return (
