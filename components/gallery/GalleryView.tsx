@@ -67,7 +67,7 @@ export function GalleryView({
 
   return (
     <div>
-      <section className="sticky top-0 z-30 border-b-2 border-ink bg-paper py-3" aria-label="篩選觀察紀錄">
+      <section className="sticky top-0 z-30 border-b-2 border-ink bg-paper py-3 max-md:pl-11" aria-label="篩選觀察紀錄">
         <div className="flex flex-wrap items-end gap-2">
           <FilterSelect
             label="任務"

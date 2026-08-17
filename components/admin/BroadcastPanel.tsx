@@ -46,12 +46,18 @@ export function BroadcastHorn({
   useEffect(() => {
     const ready = window.setTimeout(() => setMounted(true), 0);
     const start = window.setTimeout(() => void load(), 0);
+    let debounce = 0;
+    const schedule = () => {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => void load(), 800);
+    };
     const supabase = createBrowserClient();
     if (!supabase) {
-      const poll = window.setInterval(() => void load(), 4000);
+      const poll = window.setInterval(() => void load(), 15000);
       return () => {
         window.clearTimeout(ready);
         window.clearTimeout(start);
+        window.clearTimeout(debounce);
         window.clearInterval(poll);
       };
     }
@@ -60,18 +66,14 @@ export function BroadcastHorn({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "broadcasts", filter: `event_id=eq.${eventId}` },
-        () => void load(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "broadcast_responses" },
-        () => void load(),
+        schedule,
       )
       .subscribe();
-    const poll = window.setInterval(() => void load(), 8000);
+    const poll = window.setInterval(() => void load(), 15000);
     return () => {
       window.clearTimeout(ready);
       window.clearTimeout(start);
+      window.clearTimeout(debounce);
       void supabase.removeChannel(channel);
       window.clearInterval(poll);
     };

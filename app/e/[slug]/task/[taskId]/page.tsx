@@ -8,14 +8,13 @@ import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
 export default async function TaskPage(props: PageProps<"/e/[slug]/task/[taskId]">) {
   if (!isSupabaseConfigured()) notFound();
   const { slug, taskId } = await props.params;
-  const event = await getPublicEvent(slug);
-  const task = await getVisibleTask(taskId);
+  const [event, task] = await Promise.all([getPublicEvent(slug), getVisibleTask(taskId)]);
   if (!event || !task || task.event_id !== event.id) notFound();
   const siblings = await getVisibleTasks(event.id);
 
   return (
     <div className="mx-auto max-w-[540px] px-4 py-6 pb-16">
-      <Link href={`/e/${slug}`} className="text-sm font-black">
+      <Link href={`/e/${slug}`} className="inline-block text-sm font-black max-md:pl-11">
         ← 回任務板
       </Link>
       <p className="mt-4 text-xs font-black tracking-[0.2em] text-muted">

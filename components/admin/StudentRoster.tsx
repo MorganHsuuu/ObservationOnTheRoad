@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getAdminRoom } from "@/app/actions/admin";
 import { Card } from "@/components/ui";
 import { isStudentOnline } from "@/lib/broadcast";
-import { createBrowserClient } from "@/lib/supabase/browser";
 import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
 import type { ParticipantRow, SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
 
@@ -32,26 +31,9 @@ export function StudentRoster({
 
   useEffect(() => {
     const start = window.setTimeout(() => void load(), 0);
-    const supabase = createBrowserClient();
-    if (!supabase) {
-      const poll = window.setInterval(() => void load(), 8000);
-      return () => {
-        window.clearTimeout(start);
-        window.clearInterval(poll);
-      };
-    }
-    const channel = supabase
-      .channel(`admin-people:${eventId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "event_participants", filter: `event_id=eq.${eventId}` },
-        () => void load(),
-      )
-      .subscribe();
-    const poll = window.setInterval(() => void load(), 12000);
+    const poll = window.setInterval(() => void load(), 20000);
     return () => {
       window.clearTimeout(start);
-      void supabase.removeChannel(channel);
       window.clearInterval(poll);
     };
   }, [eventId, load]);

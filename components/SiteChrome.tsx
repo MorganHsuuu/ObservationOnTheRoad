@@ -27,23 +27,21 @@ export function SiteChrome({ children }: { children: ReactNode }) {
   const { slug, rail, groups } = useMemo(() => parseNav(pathname), [pathname]);
 
   return (
-    <div className="flex min-h-full flex-1">
-      <aside className="sticky top-0 z-50 flex h-svh w-11 shrink-0 flex-col self-start border-r-2 border-ink bg-paper">
-        <button
-          type="button"
-          className="flex h-11 w-11 items-center justify-center border-b-2 border-ink bg-yellow"
-          aria-label={open ? "關閉選單" : "打開選單"}
-          aria-expanded={open}
-          onClick={() => setMenuPath(open ? null : pathname)}
-        >
-          <HamburgerIcon open={open} />
-        </button>
-        <div className="hidden flex-1 items-start justify-center pt-4 md:flex">
-          <span className="text-[13px] font-black tracking-[0.34em] text-muted [writing-mode:vertical-rl] whitespace-nowrap">
-            {rail}
-          </span>
-        </div>
-      </aside>
+    <div className="min-h-full flex-1">
+      <button
+        type="button"
+        className="fixed top-0 left-0 z-50 flex h-11 w-11 items-center justify-center border-r-2 border-b-2 border-ink bg-yellow"
+        aria-label={open ? "關閉選單" : "打開選單"}
+        aria-expanded={open}
+        onClick={() => setMenuPath(open ? null : pathname)}
+      >
+        <HamburgerIcon open={open} />
+      </button>
+      <div className="pointer-events-none fixed top-11 bottom-0 left-0 z-40 hidden w-11 border-r-2 border-ink bg-paper pt-4 md:flex md:justify-center">
+        <span className="text-[13px] font-black tracking-[0.34em] text-muted [writing-mode:vertical-rl] whitespace-nowrap">
+          {rail}
+        </span>
+      </div>
 
       {open ? (
         <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="網站選單">
@@ -98,7 +96,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 md:pl-11">{children}</div>
     </div>
   );
 }

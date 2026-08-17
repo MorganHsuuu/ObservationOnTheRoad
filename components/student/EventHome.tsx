@@ -16,14 +16,19 @@ import { currentTask, liveTaskCode, shortTaskTitle, sortTasksByOrder } from "@/l
 import { formatTaipeiDate, nowTaipeiLabel } from "@/lib/time";
 import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 
-export function EventHome({ event }: { event: EventRow }) {
+export function EventHome({
+  event,
+  initialTasks,
+}: {
+  event: EventRow;
+  initialTasks: TaskRow[];
+}) {
   const router = useRouter();
   const { start } = useNavPending();
   const [team, setTeam] = useState<StoredTeam | null>(null);
   const [booted, setBooted] = useState(false);
-  const [ready, setReady] = useState(false);
   const [eventState, setEventState] = useState(event);
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [tasks, setTasks] = useState<TaskRow[]>(initialTasks);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [updated, setUpdated] = useState(nowTaipeiLabel());
@@ -32,10 +37,10 @@ export function EventHome({ event }: { event: EventRow }) {
   const [openBrief, setOpenBrief] = useState(false);
 
   const load = useCallback(
-    async (stored: StoredTeam) => {
-      setBusy(true);
+    async (stored: StoredTeam, silent = false) => {
+      if (!silent) setBusy(true);
       const result = await getStudentBoard(event.slug, stored.teamId);
-      setBusy(false);
+      if (!silent) setBusy(false);
       setUpdated(nowTaipeiLabel());
       if (!result.ok) {
         clearStoredTeam(event.slug);
@@ -45,15 +50,13 @@ export function EventHome({ event }: { event: EventRow }) {
       setEventState(result.data.event);
       setTasks(result.data.tasks);
       setSubmissions(result.data.submissions);
-      setReady(true);
     },
     [event.slug, router],
   );
 
   useEffect(() => {
-    const stored = readStoredTeam(event.slug);
     const timer = window.setTimeout(() => {
-      setTeam(stored);
+      setTeam(readStoredTeam(event.slug));
       setBooted(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -66,7 +69,7 @@ export function EventHome({ event }: { event: EventRow }) {
       return;
     }
     const timer = window.setTimeout(() => {
-      void load(team);
+      void load(team, true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [booted, event.slug, load, router, team]);
@@ -124,7 +127,7 @@ export function EventHome({ event }: { event: EventRow }) {
     [submissions],
   );
 
-  if (!booted || !team || !ready) {
+  if (!booted || !team) {
     return <PageLoader label="載入任務" />;
   }
 

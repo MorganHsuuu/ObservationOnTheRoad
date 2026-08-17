@@ -76,26 +76,17 @@ export async function getStudentBoard(slug: string, teamId: string) {
     .maybeSingle();
   if (!event) return { ok: false as const, error: "找不到這個活動" };
 
-  const { data: team } = await supabase
-    .from("teams")
-    .select("*")
-    .eq("id", teamId)
-    .eq("event_id", event.id)
-    .maybeSingle();
+  const [{ data: team }, { data: tasks }, { data: submissions }] = await Promise.all([
+    supabase.from("teams").select("*").eq("id", teamId).eq("event_id", event.id).maybeSingle(),
+    supabase
+      .from("tasks")
+      .select("*")
+      .eq("event_id", event.id)
+      .in("status", ["published", "closed"])
+      .order("order_index", { ascending: true }),
+    supabase.from("submissions").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+  ]);
   if (!team) return { ok: false as const, error: "組別已不存在，請重新加入" };
-
-  const { data: tasks } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("event_id", event.id)
-    .in("status", ["published", "closed"])
-    .order("order_index", { ascending: true });
-
-  const { data: submissions } = await supabase
-    .from("submissions")
-    .select("*")
-    .eq("team_id", teamId)
-    .order("created_at", { ascending: false });
 
   return {
     ok: true as const,

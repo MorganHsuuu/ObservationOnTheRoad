@@ -10,7 +10,7 @@ export function RefreshBar({
   busy?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b-2 border-ink bg-paper px-4 py-2 text-[13px] font-black">
+    <div className="flex items-center justify-between gap-3 border-b-2 border-ink bg-paper py-2 pr-4 pl-14 text-[13px] font-black md:px-4">
       <span className="text-muted">最後更新 {lastUpdated}</span>
       <button
         type="button"
