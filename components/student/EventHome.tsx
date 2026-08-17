@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Check } from "@phosphor-icons/react";
 import { getStudentBoard } from "@/app/actions/student";
 import { Md } from "@/components/Markdown";
-import { EventPinForm } from "@/components/student/EventPinForm";
 import { UploadForm } from "@/components/student/UploadForm";
 import { Card } from "@/components/ui";
 import { PageLoader } from "@/components/LoadingMark";
@@ -19,16 +18,13 @@ import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 export function EventHome({
   event,
   initialTasks,
-  pinUnlocked = false,
 }: {
   event: EventRow;
   initialTasks: TaskRow[];
-  pinUnlocked?: boolean;
 }) {
   const router = useRouter();
   const [team, setTeam] = useState<StoredTeam | null>(null);
   const [booted, setBooted] = useState(false);
-  const [pinOk, setPinOk] = useState(!event.requires_pin || pinUnlocked);
   const [eventState, setEventState] = useState(event);
   const [tasks, setTasks] = useState<TaskRow[]>(initialTasks);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -45,10 +41,6 @@ export function EventHome({
       const result = await getStudentBoard(event.slug, stored.teamId);
       if (!silent) setBusy(false);
       if (!result.ok) {
-        if ("needsPin" in result && result.needsPin) {
-          setPinOk(false);
-          return;
-        }
         clearStoredTeam(event.slug);
         router.replace(`/e/${event.slug}/join`);
         return;
@@ -71,7 +63,6 @@ export function EventHome({
 
   useEffect(() => {
     if (!booted) return;
-    if (event.requires_pin && !pinOk) return;
     if (!team) {
       router.replace(`/e/${event.slug}/join`);
       return;
@@ -80,10 +71,10 @@ export function EventHome({
       void load(team, true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [booted, event.requires_pin, event.slug, load, pinOk, router, team]);
+  }, [booted, event.slug, load, router, team]);
 
   useEffect(() => {
-    if (!team || (event.requires_pin && !pinOk)) return;
+    if (!team) return;
     const supabase = createBrowserClient();
     let poll: number | undefined;
 
@@ -127,7 +118,7 @@ export function EventHome({
       void supabase.removeChannel(channel);
       if (poll) window.clearInterval(poll);
     };
-  }, [event.id, event.requires_pin, load, pinOk, team]);
+  }, [event.id, load, team]);
 
   const refresh = useCallback(() => {
     if (team) void load(team);
@@ -150,23 +141,6 @@ export function EventHome({
 
   if (!booted) {
     return <PageLoader label="載入任務" />;
-  }
-
-  if (event.requires_pin && !pinOk) {
-    return (
-      <div className="mx-auto flex min-h-full max-w-[540px] flex-col justify-center px-4 py-10">
-        <p className="text-xs font-black tracking-[0.2em] text-muted">場次密碼</p>
-        <h1 className="mt-2 text-[48px] leading-[0.82] font-black tracking-[-0.02em]">登入密碼</h1>
-        <p className="mt-3 mb-8 font-medium">{event.title}</p>
-        <EventPinForm
-          slug={event.slug}
-          onVerified={() => {
-            setPinOk(true);
-            router.refresh();
-          }}
-        />
-      </div>
-    );
   }
 
   if (!team) {

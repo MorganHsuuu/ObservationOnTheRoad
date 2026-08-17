@@ -40,7 +40,7 @@ export function AdminLogin() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-[440px] flex-col justify-center px-4">
+    <div className="mx-auto flex min-h-full max-w-[440px] flex-col justify-center px-4 pt-12 pb-16">
       <p className="text-xs font-black tracking-[0.2em] text-muted">老師端</p>
       <h1 className="mt-2 text-[56px] leading-[0.82] font-black tracking-[-0.02em]">
         路上觀察

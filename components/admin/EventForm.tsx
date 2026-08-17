@@ -52,13 +52,13 @@ export function EventForm({ event }: { event?: EventRow }) {
       <Field label="地點" name="location_name" defaultValue={event?.location_name ?? ""} />
       <Field label="日期" name="event_date" type="date" defaultValue={event?.event_date ?? ""} />
       <Field
-        label="登入密碼"
+        label="後台密碼"
         name="entry_pin"
         defaultValue={event?.entry_pin ?? ""}
         placeholder="四碼數字，可不填"
         inputMode="numeric"
         maxLength={4}
-        hint="選填。填了之後，進這場後台要先輸入，知道密碼的人才能操控。"
+        hint="選填。只有老師進這場控制台要輸入，學生不用。"
       />
       <Area label="故事設定" name="story_md" defaultValue={event?.story_md ?? ""} />
       <Area label="行前說明" name="briefing_md" defaultValue={event?.briefing_md ?? ""} />

@@ -11,11 +11,6 @@ import type {
   TeamRow,
 } from "@/lib/types";
 
-export async function eventRequiresPin(slug: string) {
-  const event = await getPublicEvent(slug);
-  return Boolean(event?.requires_pin);
-}
-
 export async function getPublicEvent(slug: string) {
   await connection();
   const supabase = createAdminClient();

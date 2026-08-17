@@ -36,7 +36,7 @@ function refreshEvent(slug: string) {
 function parseEntryPin(formData: FormData): ActionResult<string | null> {
   const pin = finalizeEventPin(String(formData.get("entry_pin") ?? ""));
   if (!pin) return { ok: true, data: null };
-  if (!isEventPin(pin)) return { ok: false, error: "登入密碼請填四碼數字，或不填" };
+  if (!isEventPin(pin)) return { ok: false, error: "後台密碼請填四碼數字，或不填" };
   return { ok: true, data: pin };
 }
 
@@ -108,7 +108,7 @@ export async function updateEvent(slug: string, formData: FormData): Promise<Act
 export async function updateEventPin(slug: string, raw: string): Promise<ActionResult> {
   await requireAdmin();
   const pin = finalizeEventPin(raw);
-  if (pin && !isEventPin(pin)) return { ok: false, error: "登入密碼請填四碼數字，或不填" };
+  if (pin && !isEventPin(pin)) return { ok: false, error: "後台密碼請填四碼數字，或不填" };
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("events")

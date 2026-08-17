@@ -23,7 +23,7 @@ export default async function EventsPage() {
   const events = await getAdminEvents();
 
   return (
-    <div className="mx-auto max-w-[720px] px-4 py-8">
+    <div className="mx-auto max-w-[720px] px-4 pt-10 pb-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-black tracking-[0.2em] text-muted">老師端</p>

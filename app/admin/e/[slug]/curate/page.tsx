@@ -11,7 +11,7 @@ export default async function CuratePage(props: PageProps<"/admin/e/[slug]/curat
     getAdminTasks(event.id),
   ]);
   return (
-    <div className="mx-auto max-w-[1100px] px-4 py-6">
+    <div className="mx-auto max-w-[1100px] px-4 pt-8 pb-6">
       <h1 className="text-4xl font-black">作品牆</h1>
       <p className="mt-2 mb-6 text-sm text-muted">點 ⭐ 精選、🚫 隱藏。隱藏的不會出現在成果牆與展覽。</p>
       <CurateGrid slug={slug} submissions={submissions} tasks={tasks} />

@@ -26,7 +26,7 @@ export function AdminEventUnlock({ slug, title }: { slug: string; title: string 
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-[440px] flex-col justify-center px-4 py-10">
+    <div className="mx-auto flex min-h-[70vh] max-w-[440px] flex-col justify-center px-4 pt-12 pb-10">
       <p className="text-xs font-black tracking-[0.2em] text-muted">第二道防線</p>
       <h1 className="mt-2 text-4xl font-black">輸入密碼</h1>
       <p className="mt-3 mb-8 font-medium">{title}</p>

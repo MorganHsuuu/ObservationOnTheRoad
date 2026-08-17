@@ -207,7 +207,7 @@ export function AdminConsole({
   return (
     <div className="pb-20">
       <div
-        className={`sticky top-11 z-30 border-b-2 border-ink px-4 py-3 ${
+        className={`sticky top-11 z-30 border-b-2 border-ink px-4 pt-5 pb-4 ${
           offline ? "bg-danger text-white" : published ? "bg-yellow" : "bg-paper"
         }`}
       >

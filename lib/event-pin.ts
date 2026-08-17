@@ -30,6 +30,6 @@ export function mapEventRow(
   return {
     ...row,
     entry_pin: exposePin ? pin : null,
-    requires_pin: Boolean(pin) || Boolean(row.requires_pin),
+    requires_pin: false,
   };
 }
