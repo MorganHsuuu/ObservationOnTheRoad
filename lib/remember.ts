@@ -1,3 +1,5 @@
+import { digitsOnly } from "@/lib/team-code";
+
 const ADMIN_PASSWORD_KEY = "observe:admin:password";
 
 export type RememberedJoin = {
@@ -28,7 +30,7 @@ export function readRememberedJoin(slug: string): RememberedJoin {
     try {
       const parsed = JSON.parse(raw) as Partial<RememberedJoin>;
       return {
-        code: String(parsed.code ?? "").slice(0, 2),
+        code: digitsOnly(String(parsed.code ?? "")).slice(0, 2),
         studentId: String(parsed.studentId ?? ""),
         studentName: String(parsed.studentName ?? ""),
       };
@@ -36,7 +38,7 @@ export function readRememberedJoin(slug: string): RememberedJoin {
       /* fall through */
     }
   }
-  const legacyCode = localStorage.getItem(`observe:${slug}:last-code`) ?? "";
+  const legacyCode = digitsOnly(localStorage.getItem(`observe:${slug}:last-code`) ?? "").slice(0, 2);
   return { code: legacyCode.slice(0, 2), studentId: "", studentName: "" };
 }
 
