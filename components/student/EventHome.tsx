@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getStudentBoard } from "@/app/actions/student";
 import { Md } from "@/components/Markdown";
@@ -33,6 +33,7 @@ export function EventHome({
   const [banner, setBanner] = useState<TaskRow | null>(null);
   const [openStory, setOpenStory] = useState(false);
   const [openBrief, setOpenBrief] = useState(false);
+  const [pickedId, setPickedId] = useState<string | null>(null);
 
   const load = useCallback(
     async (stored: StoredTeam, silent = false) => {
@@ -96,6 +97,7 @@ export function EventHome({
           const next = payload.new as TaskRow | undefined;
           if (next?.status === "published") {
             setBanner(next);
+            setPickedId(next.id);
             navigator.vibrate?.(200);
           }
           if (team) void load(team);
@@ -135,6 +137,7 @@ export function EventHome({
     );
     return new Set(mine.map((item) => item.task_id));
   }, [submissions, team]);
+  const selected = allTasks.find((task) => task.id === pickedId) ?? latest ?? null;
 
   if (!booted || !team) {
     return <PageLoader label="載入任務" />;
@@ -147,6 +150,7 @@ export function EventHome({
           type="button"
           onClick={() => {
             setBanner(null);
+            if (banner) setPickedId(banner.id);
             document.getElementById("current-task")?.scrollIntoView({ behavior: "smooth" });
           }}
           className="block w-full bg-yellow px-4 py-3 text-center text-base font-black"
@@ -158,10 +162,11 @@ export function EventHome({
       <div className="mx-auto max-w-[540px] space-y-4 px-4 pt-4">
         {allTasks.length > 0 ? (
           <TaskTrack
-            slug={event.slug}
             tasks={allTasks}
             doneIds={doneIds}
             currentId={latest?.id}
+            selectedId={selected?.id}
+            onSelect={setPickedId}
           />
         ) : null}
 
@@ -172,39 +177,50 @@ export function EventHome({
         ) : null}
 
         <div id="current-task">
-          {latest ? (
+          {selected && selected.status !== "draft" ? (
             <Card className="hard-shadow overflow-hidden">
-              <div className="bg-yellow px-3.5 py-2">
-                <div className="text-[11px] font-black tracking-[0.2em] text-yellow-deep">
-                  目前任務 ・ {liveTaskCode(latest.id, tasks)}
-                  {doneIds.has(latest.id) ? " ・ 已完成" : ""}
+              <div className={`px-3.5 py-2 ${selected.id === latest?.id ? "bg-yellow" : "bg-card"}`}>
+                <div
+                  className={`text-[11px] font-black tracking-[0.2em] ${
+                    selected.id === latest?.id ? "text-yellow-deep" : "text-muted"
+                  }`}
+                >
+                  {selected.id === latest?.id ? "目前任務" : selected.status === "closed" ? "已截止" : "可查看"}
+                  {" ・ "}
+                  {liveTaskCode(selected.id, tasks)}
+                  {doneIds.has(selected.id) ? " ・ 已完成" : ""}
                 </div>
                 <h2 className="text-[26px] leading-tight font-black">
-                  {shortTaskTitle(latest.title)}
+                  {shortTaskTitle(selected.title)}
                 </h2>
               </div>
               <div className="px-3.5 py-4">
-                <p className="whitespace-pre-line text-[16px] font-medium">{latest.prompt_md}</p>
-                {latest.hint ? (
+                <p className="whitespace-pre-line text-[16px] font-medium">{selected.prompt_md}</p>
+                {selected.hint ? (
                   <p className="mt-3 border-l-[6px] border-yellow pl-3 text-sm font-medium text-muted">
-                    {latest.hint}
+                    {selected.hint}
                   </p>
                 ) : null}
                 <div className="mt-4">
                   <UploadForm
                     event={eventState}
-                    task={latest}
+                    task={selected}
                     compact
                     onUploaded={() => void load(team)}
                   />
                 </div>
               </div>
             </Card>
+          ) : selected?.status === "draft" ? (
+            <Card className="px-4 py-6">
+              <p className="font-black">任務 {taskCode(selected.order_index)} 尚未公布</p>
+              <p className="mt-2 text-sm font-medium text-muted">老師一出題，這裡就會出現。</p>
+            </Card>
           ) : (
             <Card className="px-4 py-6">
               <p className="font-black">
                 {ordered.length > 0
-                  ? "現在沒有進行中的任務。點上面的圈圈可以查看已開放的題，虛線的還沒公布。"
+                  ? "現在沒有進行中的任務。左右滑上面的圈圈，點已開放的就能查看。"
                   : "任務還沒開始，先看看今天的故事設定吧"}
               </p>
             </Card>
@@ -229,11 +245,15 @@ export function EventHome({
                       ? "已完成・可補交"
                       : "可補交";
                 return (
-                  <Link
+                  <button
                     key={task.id}
-                    href={`/e/${event.slug}/task/${task.id}`}
-                    className={`flex items-center gap-3 border-b-2 border-ink px-3.5 py-3 last:border-b-0 ${
-                      current ? "bg-yellow" : ""
+                    type="button"
+                    onClick={() => {
+                      setPickedId(task.id);
+                      document.getElementById("current-task")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                    className={`flex w-full items-center gap-3 border-b-2 border-ink px-3.5 py-3 text-left last:border-b-0 ${
+                      current ? "bg-yellow" : selected?.id === task.id ? "bg-card" : ""
                     }`}
                   >
                     <span className="w-10 shrink-0 font-black tracking-wider">
@@ -249,7 +269,7 @@ export function EventHome({
                     >
                       {label}
                     </span>
-                  </Link>
+                  </button>
                 );
               })}
             </Card>
@@ -274,18 +294,30 @@ export function EventHome({
 }
 
 function TaskTrack({
-  slug,
   tasks,
   doneIds,
   currentId,
+  selectedId,
+  onSelect,
 }: {
-  slug: string;
   tasks: TaskRow[];
   doneIds: Set<string>;
   currentId?: string;
+  selectedId?: string;
+  onSelect: (taskId: string) => void;
 }) {
-  const [hint, setHint] = useState("");
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const doneCount = tasks.filter((task) => doneIds.has(task.id)).length;
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    const id = selectedId ?? currentId;
+    if (!scroller || !id) return;
+    const node = scroller.querySelector<HTMLElement>(`[data-task-id="${id}"]`);
+    if (!node) return;
+    const left = node.offsetLeft - scroller.clientWidth / 2 + node.offsetWidth / 2;
+    scroller.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [currentId, selectedId, tasks.length]);
 
   return (
     <Card>
@@ -295,55 +327,43 @@ function TaskTrack({
           {doneCount}/{tasks.length} 已完成
         </span>
       </div>
-      <div className="flex flex-wrap gap-2.5 p-3">
-        {tasks.map((task) => {
-          const done = doneIds.has(task.id);
-          const current = task.id === currentId;
-          const locked = task.status === "draft";
-          const code = taskCode(task.order_index);
-          const circle = (
-            <>
-              <i
-                className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${
-                  locked ? "border-dashed" : ""
-                } ${done ? "bg-ink" : current ? "bg-yellow" : ""}`}
-              />
-              <span className={`text-[11px] font-black ${done || current ? "text-ink" : "text-muted"}`}>
-                {code}
-              </span>
-            </>
-          );
-
-          if (locked) {
+      <div
+        ref={scrollerRef}
+        className="overflow-x-auto overscroll-x-contain px-3 py-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex w-max flex-nowrap gap-2.5">
+          {tasks.map((task) => {
+            const done = doneIds.has(task.id);
+            const current = task.id === currentId;
+            const selected = task.id === selectedId;
+            const locked = task.status === "draft";
+            const code = taskCode(task.order_index);
             return (
               <button
                 key={task.id}
                 type="button"
-                className="w-[42px] text-center"
-                aria-label={`任務 ${code} 尚未公布`}
-                onClick={() => setHint(`任務 ${code} 尚未公布`)}
+                data-task-id={task.id}
+                className="w-[42px] shrink-0 text-center"
+                aria-label={
+                  locked
+                    ? `任務 ${code} 尚未公布`
+                    : `任務 ${code}${done ? "，已完成" : current ? "，進行中" : ""}`
+                }
+                onClick={() => onSelect(task.id)}
               >
-                {circle}
+                <i
+                  className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${
+                    locked ? "border-dashed" : ""
+                  } ${done ? "bg-ink" : current ? "bg-yellow" : selected ? "bg-card" : ""}`}
+                />
+                <span className={`text-[11px] font-black ${done || current || selected ? "text-ink" : "text-muted"}`}>
+                  {code}
+                </span>
               </button>
             );
-          }
-
-          return (
-            <Link
-              key={task.id}
-              href={`/e/${slug}/task/${task.id}`}
-              className="w-[42px] text-center"
-              aria-label={`任務 ${code}${done ? "，已完成" : current ? "，進行中" : ""}`}
-              onClick={() => setHint("")}
-            >
-              {circle}
-            </Link>
-          );
-        })}
+          })}
+        </div>
       </div>
-      {hint ? (
-        <p className="border-t-2 border-ink px-3.5 py-2 text-sm font-black">{hint}</p>
-      ) : null}
     </Card>
   );
 }
