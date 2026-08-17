@@ -415,7 +415,8 @@ export async function reorderTasks(slug: string, orderedIds: string[]): Promise<
   );
   const failed = results.find((item) => item.error)?.error;
   if (failed) return { ok: false, error: failed.message };
-  refreshEvent(slug);
+  revalidatePath(`/admin/e/${slug}/tasks`);
+  revalidatePath(`/e/${slug}`);
   return { ok: true, data: undefined };
 }
 

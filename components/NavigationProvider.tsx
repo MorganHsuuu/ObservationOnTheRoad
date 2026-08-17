@@ -86,6 +86,9 @@ function NavigationListener({
       if (url.pathname === window.location.pathname && url.search === window.location.search) {
         return;
       }
+      if (url.pathname.startsWith("/admin") && window.location.pathname.startsWith("/admin")) {
+        return;
+      }
       start("載入中");
     }
     document.addEventListener("click", onClick);

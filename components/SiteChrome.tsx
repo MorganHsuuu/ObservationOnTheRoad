@@ -251,9 +251,8 @@ function teacherGroups(slug: string | null): { title: string; links: MenuLink[] 
       { href: `/admin/e/${slug}`, label: "控制台", exact: true },
       { href: `/admin/e/${slug}/tasks`, label: "題庫" },
       { href: `/admin/e/${slug}/teams`, label: "組別" },
-      { href: `/admin/e/${slug}/curate`, label: "作品牆" },
+      { href: `/admin/e/${slug}/curate`, label: "成果管理" },
       { href: `/e/${slug}/gallery`, label: "成果牆" },
-      { href: `/show/${slug}`, label: "展覽" },
       { href: `/admin/e/${slug}/settings`, label: "設定" },
     );
   }
@@ -296,7 +295,7 @@ function hereLabel(pathname: string, slug: string | null) {
   if (slug && pathname === `/admin/e/${slug}`) return "控制台";
   if (slug && pathname === `/admin/e/${slug}/tasks`) return "題庫";
   if (slug && pathname === `/admin/e/${slug}/teams`) return "組別";
-  if (slug && pathname === `/admin/e/${slug}/curate`) return "作品牆";
+  if (slug && pathname === `/admin/e/${slug}/curate`) return "成果管理";
   if (slug && pathname === `/admin/e/${slug}/settings`) return "設定";
   return "路上觀察";
 }

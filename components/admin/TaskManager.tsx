@@ -113,9 +113,21 @@ export function TaskManager({
     if (!dragIdRef.current) return;
     dragIdRef.current = null;
     setDragId(null);
+    const previous = originRef.current;
     const ids = itemsRef.current.map((task) => task.id);
-    if (ids.join(",") === originRef.current) return;
-    void mutate("排序中", () => reorderTasks(slug, ids));
+    if (ids.join(",") === previous) return;
+    originRef.current = ids.join(",");
+    void reorderTasks(slug, ids).then((result) => {
+      if (result.ok) return;
+      setError(result.error);
+      const order = previous.split(",");
+      setItems((list) =>
+        order
+          .map((id) => list.find((task) => task.id === id))
+          .filter((task): task is TaskRow => Boolean(task)),
+      );
+      originRef.current = previous;
+    });
   }
 
   return (

@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { cache } from "react";
 import { mapEventRow } from "@/lib/event-pin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createAnonServerClient } from "@/lib/supabase/anon";
@@ -80,7 +81,7 @@ export async function getSubmissionLikes(eventId: string) {
   return (data ?? []) as SubmissionLikeRow[];
 }
 
-export async function getAdminEvent(slug: string) {
+export const getAdminEvent = cache(async (slug: string) => {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("events")
@@ -89,7 +90,7 @@ export async function getAdminEvent(slug: string) {
     .maybeSingle();
   if (error) throw error;
   return data ? mapEventRow(data as EventRow, true) : null;
-}
+});
 
 export async function getAdminEvents() {
   const supabase = createAdminClient();
@@ -153,6 +154,24 @@ export async function getAdminSubmissions(eventId: string) {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as SubmissionWithMeta[];
+}
+
+export async function getAdminProgressBits(eventId: string) {
+  const supabase = createAdminClient();
+  const { data: tasks, error: taskError } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("event_id", eventId);
+  if (taskError) throw taskError;
+  const taskIds = (tasks ?? []).map((task) => task.id);
+  if (taskIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("submissions")
+    .select("task_id, student_id, team_id")
+    .in("task_id", taskIds);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function getLiveEvent() {

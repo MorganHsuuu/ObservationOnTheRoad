@@ -66,7 +66,7 @@ export function TeacherTaskTrack({
                 aria-label={
                   locked
                     ? `任務 ${code} 尚未公布`
-                    : `任務 ${code}${current ? "，發布中" : task.status === "closed" ? "，已截止" : ""}，${done}/${total || 0} 人已交`
+                    : `任務 ${code}${current ? "，發佈中" : task.status === "closed" ? "，已截止" : ""}，${done}/${total || 0} 人已交`
                 }
                 onClick={() => onSelect(task.id)}
               >

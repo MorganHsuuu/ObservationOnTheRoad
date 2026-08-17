@@ -213,10 +213,10 @@ export function AdminConsole({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className={`text-xs font-black tracking-[0.24em] ${offline ? "text-white" : published ? "text-yellow-deep" : "text-muted"}`}>
-              {offline ? "已離線" : published ? "現在發布中" : "尚未發布任務"}
+            <div className={`text-sm font-black leading-none ${offline ? "text-white" : published ? "text-yellow-deep" : "text-muted"}`}>
+              {offline ? "已離線" : published ? "發佈中" : "尚未發佈"}
             </div>
-            <div className="text-[26px] leading-tight font-black">
+            <div className="mt-2 text-[26px] leading-tight font-black">
               {offline
                 ? "動作不會送出"
                 : published
@@ -268,9 +268,9 @@ export function AdminConsole({
           <Card className="mt-4">
             <div className="flex items-start justify-between gap-3 border-b-2 border-ink px-3.5 py-2.5">
               <div className="min-w-0">
-                <div className="text-[11px] font-black tracking-[0.2em] text-muted">
+                <div className="text-[13px] font-black text-muted">
                   {selected.status === "published"
-                    ? "發布中"
+                    ? "發佈中"
                     : selected.status === "closed"
                       ? "已截止"
                       : "尚未公布"}

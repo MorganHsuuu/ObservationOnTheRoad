@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import { AdminEventNav } from "@/components/admin/AdminEventNav";
 import { AdminEventUnlock } from "@/components/admin/AdminEventUnlock";
 import { isAdminAuthed } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/env";
@@ -20,10 +19,5 @@ export default async function AdminEventLayout({
     return <AdminEventUnlock slug={slug} title={event.title} />;
   }
 
-  return (
-    <div>
-      <AdminEventNav slug={slug} />
-      {children}
-    </div>
-  );
+  return children;
 }

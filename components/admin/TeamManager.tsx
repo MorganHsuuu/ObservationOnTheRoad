@@ -10,7 +10,7 @@ import { isStudentOnline } from "@/lib/broadcast";
 import { membersOfTeam, studentDoneTask, teamTaskProgress } from "@/lib/progress";
 import { boardTaskCode, currentTask } from "@/lib/task-utils";
 import { digitsOnly, teamLabel } from "@/lib/team-code";
-import type { ParticipantRow, SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
+import type { ParticipantRow, TaskRow, TeamRow } from "@/lib/types";
 
 export function TeamManager({
   slug,
@@ -22,7 +22,7 @@ export function TeamManager({
   slug: string;
   teams: TeamRow[];
   tasks: TaskRow[];
-  submissions: SubmissionWithMeta[];
+  submissions: { task_id: string; student_id: string | null; team_id: string | null }[];
   participants: ParticipantRow[];
 }) {
   const { start, stop } = useNavPending();

@@ -5,17 +5,26 @@ export type CompressedPair = {
   thumb: File;
 };
 
+const FULL_MAX_SIDE = 1920;
+const FULL_QUALITY = 0.84;
+const THUMB_MAX_SIDE = 800;
+const THUMB_QUALITY = 0.78;
+const MAX_BYTES = 1_400_000;
+
 export async function compressForUpload(
   file: File,
   onProgress?: (percent: number) => void,
 ): Promise<CompressedPair> {
   onProgress?.(10);
   try {
-    const source = await decodeImage(file);
-    onProgress?.(28);
-    const fullBlob = await canvasJpeg(source, 1280, 0.7);
+    const source = await decodeForUpload(file, FULL_MAX_SIDE);
+    onProgress?.(30);
+    let fullBlob = await canvasJpeg(source, FULL_MAX_SIDE, FULL_QUALITY);
+    if (fullBlob.size > MAX_BYTES) {
+      fullBlob = await canvasJpeg(source, FULL_MAX_SIDE, 0.76);
+    }
     onProgress?.(72);
-    const thumbBlob = await canvasJpeg(source, 480, 0.62);
+    const thumbBlob = await canvasJpeg(source, THUMB_MAX_SIDE, THUMB_QUALITY);
     closeSource(source);
     onProgress?.(80);
     return namedPair(fullBlob, thumbBlob);
@@ -29,14 +38,14 @@ async function compressWithLibrary(
   onProgress?: (percent: number) => void,
 ): Promise<CompressedPair> {
   const full = await imageCompression(file, {
-    maxWidthOrHeight: 1280,
-    maxSizeMB: 0.5,
-    initialQuality: 0.7,
+    maxWidthOrHeight: FULL_MAX_SIDE,
+    maxSizeMB: MAX_BYTES / (1024 * 1024),
+    initialQuality: FULL_QUALITY,
     fileType: "image/jpeg",
     useWebWorker: true,
     onProgress: (percent) => onProgress?.(12 + Math.round(percent * 0.68)),
   });
-  const thumbBlob = await canvasJpeg(await decodeImage(full), 480, 0.62);
+  const thumbBlob = await canvasJpeg(await decodeImage(full), THUMB_MAX_SIDE, THUMB_QUALITY);
   return namedPair(full, thumbBlob);
 }
 
@@ -46,6 +55,26 @@ function namedPair(full: Blob, thumb: Blob): CompressedPair {
     full: new File([full], `full-${stamp}.jpg`, { type: "image/jpeg" }),
     thumb: new File([thumb], `thumb-${stamp}.jpg`, { type: "image/jpeg" }),
   };
+}
+
+async function decodeForUpload(file: Blob, maxSide: number) {
+  const full = await decodeImage(file);
+  const long = Math.max(full.width, full.height);
+  if (long <= maxSide) return full;
+  const scale = maxSide / long;
+  const width = Math.max(1, Math.round(full.width * scale));
+  const height = Math.max(1, Math.round(full.height * scale));
+  try {
+    const sized = await createImageBitmap(full, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: "high",
+    });
+    closeSource(full);
+    return sized;
+  } catch {
+    return full;
+  }
 }
 
 async function decodeImage(file: Blob) {
@@ -91,7 +120,7 @@ async function canvasJpeg(
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) throw new Error("canvas");
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "medium";
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, "image/jpeg", quality);

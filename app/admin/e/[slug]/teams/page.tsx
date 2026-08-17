@@ -3,7 +3,7 @@ import { TeamManager } from "@/components/admin/TeamManager";
 import {
   getAdminEvent,
   getAdminParticipants,
-  getAdminSubmissions,
+  getAdminProgressBits,
   getAdminTasks,
   getAdminTeams,
 } from "@/lib/queries";
@@ -15,7 +15,7 @@ export default async function TeamsPage(props: PageProps<"/admin/e/[slug]/teams"
   const [teams, tasks, submissions, participants] = await Promise.all([
     getAdminTeams(event.id),
     getAdminTasks(event.id),
-    getAdminSubmissions(event.id),
+    getAdminProgressBits(event.id),
     getAdminParticipants(event.id),
   ]);
   return (
