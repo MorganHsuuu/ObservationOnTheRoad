@@ -40,10 +40,10 @@ export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">)
         <div className="latin mt-1 text-[clamp(22px,4.4vw,44px)] md:ml-[78px]">
           Observation on the road
         </div>
-        <dl className="mt-8 flex flex-wrap border-2 border-ink bg-card">
-          <Meta label="場域" value={event.location_name ?? "未定"} />
-          <Meta label="日期" value={formatTaipeiDate(event.event_date)} />
-          <Meta label="任務" value={`${tasks.length} 則`} />
+        <dl className="mt-8 grid grid-cols-2 overflow-hidden border-2 border-ink bg-card md:grid-cols-4">
+          <Meta label="場域" value={event.location_name ?? "未定"} className="border-r-2 border-b-2 border-ink md:border-b-0" />
+          <Meta label="日期" value={formatTaipeiDate(event.event_date)} className="border-b-2 border-ink md:border-r-2 md:border-b-0" />
+          <Meta label="任務" value={`${tasks.length} 則`} className="border-r-2 border-ink" />
           <Meta label="觀察紀錄" value={`${submissions.length} 筆`} hit />
         </dl>
       </header>
@@ -54,9 +54,19 @@ export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">)
   );
 }
 
-function Meta({ label, value, hit }: { label: string; value: string; hit?: boolean }) {
+function Meta({
+  label,
+  value,
+  hit,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  hit?: boolean;
+  className?: string;
+}) {
   return (
-    <div className={`min-w-[140px] flex-1 border-r-2 border-ink px-[18px] py-3.5 last:border-r-0 ${hit ? "bg-yellow" : ""}`}>
+    <div className={`px-[18px] py-3.5 ${hit ? "bg-yellow" : ""} ${className}`}>
       <dt className="text-xs font-medium tracking-[0.14em] text-muted">{label}</dt>
       <dd className="mt-0.5 text-[22px] leading-tight font-black">{value}</dd>
     </div>

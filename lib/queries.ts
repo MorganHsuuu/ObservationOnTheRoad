@@ -45,7 +45,7 @@ export async function getVisibleTask(taskId: string) {
 }
 
 export async function getPublicSubmissions(eventId: string) {
-  const supabase = createAnonServerClient();
+  const supabase = createAdminClient();
   const { data: tasks, error: taskError } = await supabase
     .from("tasks")
     .select("id")

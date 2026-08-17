@@ -122,10 +122,12 @@ export function EventHome({
 
   const latest = useMemo(() => currentTask(tasks), [tasks]);
   const ordered = useMemo(() => sortTasksByOrder(tasks), [tasks]);
-  const doneIds = useMemo(
-    () => new Set(submissions.map((item) => item.task_id)),
-    [submissions],
-  );
+  const doneIds = useMemo(() => {
+    const mine = submissions.filter(
+      (item) => !team?.studentId || !item.student_id || item.student_id === team.studentId,
+    );
+    return new Set(mine.map((item) => item.task_id));
+  }, [submissions, team]);
 
   if (!booted || !team) {
     return <PageLoader label="載入任務" />;

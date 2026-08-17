@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getStudentBoard, uploadSubmission } from "@/app/actions/student";
@@ -31,7 +31,8 @@ export function UploadForm({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [boardEvent, setBoardEvent] = useState<EventRow | null>(null);
   const [boardTask, setBoardTask] = useState<TaskRow | null>(null);
 
@@ -39,6 +40,13 @@ export function UploadForm({
   const liveTask = boardTask?.id === task.id ? boardTask : task;
   const closed = liveTask.status === "closed";
   const canUpload = uploadAllowed(liveTask);
+  const existing = useMemo(() => {
+    const team = readStoredTeam(event.slug);
+    const mineOnly = team?.studentId
+      ? mine.filter((item) => !item.student_id || item.student_id === team.studentId)
+      : mine;
+    return mineOnly[0] ?? null;
+  }, [event.slug, mine]);
 
   useEffect(() => {
     const team = readStoredTeam(event.slug);
@@ -51,7 +59,12 @@ export function UploadForm({
       setBoardEvent(result.data.event);
       const fresh = result.data.tasks.find((item) => item.id === task.id);
       if (fresh) setBoardTask(fresh);
-      setMine(result.data.submissions.filter((item) => item.task_id === task.id));
+      const rows = result.data.submissions.filter((item) => item.task_id === task.id);
+      setMine(
+        team.studentId
+          ? rows.filter((item) => !item.student_id || item.student_id === team.studentId)
+          : rows,
+      );
     });
   }, [event.slug, router, task.id]);
 
@@ -59,7 +72,7 @@ export function UploadForm({
     if (!next) return;
     setFile(next);
     setError("");
-    setDone(false);
+    setJustSaved(false);
     const reader = new FileReader();
     reader.onload = () => {
       setPreview(String(reader.result));
@@ -68,10 +81,20 @@ export function UploadForm({
     reader.readAsDataURL(next);
   }
 
-  function resetPick() {
+  function startEdit() {
+    setEditing(true);
+    setJustSaved(false);
+    setCaption(existing?.caption ?? "");
+    setPreview(existing ? sharpImage(existing) : null);
+    setFile(null);
+    setError("");
+  }
+
+  function cancelEdit() {
+    setEditing(false);
     setFile(null);
     setPreview(null);
-    setDone(false);
+    setCaption("");
     setError("");
     setProgress(0);
   }
@@ -89,9 +112,10 @@ export function UploadForm({
 
   async function submitOnce() {
     const team = readStoredTeam(event.slug);
-    if (!team || !file) return { ok: false as const, error: "請先加入組別並選一張照片" };
-    setProgress(8);
-    const pair = await compressForUpload(file, setProgress);
+    if (!team) return { ok: false as const, error: "請先加入組別並選一張照片" };
+    if (!file && !existing) return { ok: false as const, error: "請先拍一張照片" };
+    if (file) setProgress(8);
+    const pair = file ? await compressForUpload(file, setProgress) : null;
     const coords = await locate();
     const form = new FormData();
     form.set("slug", event.slug);
@@ -102,15 +126,18 @@ export function UploadForm({
     form.set("studentName", team.studentName ?? "");
     if (coords.lat != null) form.set("lat", String(coords.lat));
     if (coords.lng != null) form.set("lng", String(coords.lng));
-    form.set("full", pair.full);
-    form.set("thumb", pair.thumb);
+    if (pair) {
+      form.set("full", pair.full);
+      form.set("thumb", pair.thumb);
+    }
     setProgress(92);
     return uploadSubmission(form);
   }
 
   async function onSubmit(eventForm: React.FormEvent) {
     eventForm.preventDefault();
-    if (!file || busy) return;
+    if (busy) return;
+    if (!file && !existing) return;
     if (task.requires_caption && !caption.trim()) {
       setError("寫一句話再說說你為什麼拍它");
       captionRef.current?.focus();
@@ -123,15 +150,23 @@ export function UploadForm({
       try {
         const result = await submitOnce();
         if (result.ok) {
-          setDone(true);
           setProgress(100);
           setBusy(false);
+          setEditing(false);
+          setFile(null);
+          setPreview(null);
+          setJustSaved(true);
           onUploaded?.();
           const team = readStoredTeam(event.slug);
           if (team) {
             void getStudentBoard(event.slug, team.teamId).then((board) => {
               if (!board.ok) return;
-              setMine(board.data.submissions.filter((item) => item.task_id === task.id));
+              const rows = board.data.submissions.filter((item) => item.task_id === task.id);
+              setMine(
+                team.studentId
+                  ? rows.filter((item) => !item.student_id || item.student_id === team.studentId)
+                  : rows,
+              );
             });
           }
           return;
@@ -149,35 +184,7 @@ export function UploadForm({
     setProgress(0);
   }
 
-  if (done) {
-    return (
-      <Card className="px-4 py-8 text-center">
-        <p className="text-2xl font-black">回傳成功 🎉 繼續觀察吧</p>
-        <button
-          type="button"
-          className="mt-5 flex min-h-14 w-full items-center justify-center border-2 border-ink bg-card text-lg font-black"
-          onClick={resetPick}
-        >
-          再傳一張
-        </button>
-        {!compact && liveEvent.gallery_public ? (
-          <Link
-            href={`/e/${event.slug}/gallery`}
-            className="mt-2 flex min-h-14 items-center justify-center border-2 border-ink bg-ink text-lg font-black text-paper"
-          >
-            看看大家拍了什麼
-          </Link>
-        ) : !compact ? (
-          <Link
-            href={`/e/${event.slug}`}
-            className="mt-2 flex min-h-14 items-center justify-center border-2 border-ink bg-card text-lg font-black"
-          >
-            回到任務板
-          </Link>
-        ) : null}
-      </Card>
-    );
-  }
+  const showForm = canUpload && (!existing || editing);
 
   return (
     <div className="space-y-4">
@@ -185,14 +192,51 @@ export function UploadForm({
         <Card className="px-4 py-5">
           <p className="font-black">這個任務已經截止囉</p>
         </Card>
-      ) : canUpload ? (
+      ) : null}
+
+      {existing && !editing ? (
+        <Card className="overflow-hidden">
+          {justSaved ? (
+            <div className="bg-yellow px-3.5 py-2 text-sm font-black">已送出，這題每人一張。</div>
+          ) : (
+            <div className="px-3.5 py-2 text-[11px] font-black tracking-[0.2em] text-muted">
+              你的回傳
+            </div>
+          )}
+          {sharpImage(existing) ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={sharpImage(existing)} alt="" className="w-full" />
+          ) : null}
+          <div className="px-3.5 py-3">
+            <p className="font-black">{existing.caption || "（沒有說明）"}</p>
+            {canUpload ? (
+              <Button className="mt-3 min-h-12 text-[15px]" variant="ghost" onClick={startEdit}>
+                改照片或說明
+              </Button>
+            ) : null}
+            {!compact && liveEvent.gallery_public ? (
+              <Link
+                href={`/e/${event.slug}/gallery`}
+                className="mt-2 flex min-h-12 items-center justify-center border-2 border-ink bg-ink text-[15px] font-black text-paper"
+              >
+                看看大家拍了什麼
+              </Link>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
+      {showForm ? (
         <form onSubmit={onSubmit} className="space-y-4">
+          {editing ? (
+            <p className="text-sm font-black">改這張就好，不會再多傳一筆。</p>
+          ) : null}
           {preview ? (
             <div className="border-2 border-ink bg-[#DEDCD4]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={preview} alt="預覽" className="max-h-72 w-full object-cover" />
               <div className="grid grid-cols-2 border-t-2 border-ink">
-                <label className="relative flex min-h-12 cursor-pointer items-center justify-center font-black">
+                <label className="relative flex min-h-12 cursor-pointer items-center justify-center bg-card font-black active:bg-yellow">
                   重拍
                   <input
                     type="file"
@@ -205,7 +249,7 @@ export function UploadForm({
                     }}
                   />
                 </label>
-                <label className="relative flex min-h-12 cursor-pointer items-center justify-center border-l-2 border-ink font-black">
+                <label className="relative flex min-h-12 cursor-pointer items-center justify-center border-l-2 border-ink bg-card font-black active:bg-yellow">
                   換一張
                   <input
                     type="file"
@@ -221,7 +265,7 @@ export function UploadForm({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-yellow text-ink">
+              <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card text-ink active:bg-yellow">
                 <span className="text-3xl" aria-hidden>
                   📷
                 </span>
@@ -237,7 +281,7 @@ export function UploadForm({
                   }}
                 />
               </label>
-              <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card">
+              <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card active:bg-yellow">
                 <span className="text-3xl" aria-hidden>
                   🖼
                 </span>
@@ -280,35 +324,19 @@ export function UploadForm({
           {error ? (
             <p className="bg-danger px-3 py-3 text-sm font-black text-white">{error}</p>
           ) : null}
-          <Button type="submit" disabled={busy || !file}>
-            {busy ? "上傳中…" : error ? "上傳失敗，再試一次" : file ? "送出回傳" : "先拍一張再送出"}
+          <Button type="submit" disabled={busy || (!file && !existing)}>
+            {busy ? "上傳中…" : error ? "上傳失敗，再試一次" : existing ? "更新回傳" : file ? "送出回傳" : "先拍一張再送出"}
           </Button>
+          {editing ? (
+            <Button type="button" variant="ghost" className="min-h-12 text-[15px]" onClick={cancelEdit}>
+              先不改
+            </Button>
+          ) : null}
         </form>
-      ) : (
+      ) : !existing && !closed ? (
         <Card className="px-4 py-5">
-          <p className="font-black">
-            {closed ? "這個任務已經截止囉" : "這題還不能交，請重新整理任務板"}
-          </p>
+          <p className="font-black">這題還不能交，請重新整理任務板</p>
         </Card>
-      )}
-
-      {mine.length > 0 ? (
-        <section id="mine" className="space-y-2">
-          <h2 className="text-xs font-black tracking-[0.2em] text-muted">
-            我的回傳（{mine.length}）
-          </h2>
-          {mine.map((item) => (
-            <Card key={item.id} className="overflow-hidden">
-              {sharpImage(item) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={sharpImage(item)} alt="" className="w-full" />
-              ) : null}
-              <div className="px-3.5 py-3">
-                <p className="font-black">{item.caption || "（沒有說明）"}</p>
-              </div>
-            </Card>
-          ))}
-        </section>
       ) : null}
     </div>
   );

@@ -187,7 +187,6 @@ export function BroadcastGate({ slug }: { slug: string }) {
           老師廣播 ・ {broadcastKindLabel(live.kind)}
         </p>
         <h2 className="mt-2 text-[28px] leading-[1.05] font-black">{live.body}</h2>
-        <p className="mt-3 text-sm font-medium">答完才能回到任務。</p>
         {error ? <p className="mt-3 bg-danger px-3 py-2 text-sm font-black text-white">{error}</p> : null}
         <div className="mt-5 space-y-2">
           {live.kind === "ack" ? (

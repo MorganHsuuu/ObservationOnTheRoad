@@ -39,8 +39,18 @@ export function GalleryView({
     window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
   }
 
+  const teamMap = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
+  const labeledAll = useMemo(
+    () =>
+      submissions.map((item) => ({
+        ...item,
+        team: item.team ?? (item.team_id ? teamMap.get(item.team_id) ?? null : null),
+      })),
+    [submissions, teamMap],
+  );
+
   const list = useMemo(() => {
-    const filtered = submissions.filter((item) => {
+    const filtered = labeledAll.filter((item) => {
       const taskOk =
         taskFilter === "all" || liveTaskCode(item.task.id, tasks) === taskFilter;
       const teamOk =
@@ -53,9 +63,9 @@ export function GalleryView({
       return [...filtered].sort((a, b) => Number(b.is_featured) - Number(a.is_featured));
     }
     return filtered;
-  }, [featuredFirst, submissions, taskFilter, teamFilter, tasks]);
+  }, [featuredFirst, labeledAll, taskFilter, teamFilter, tasks]);
 
-  const open = list.find((item) => item.id === openId) ?? submissions.find((item) => item.id === openId);
+  const open = list.find((item) => item.id === openId) ?? labeledAll.find((item) => item.id === openId);
 
   useEffect(() => {
     if (!openId) return;
@@ -179,22 +189,23 @@ function PhotoFrame({
   const code = liveTaskCode(item.task.id, tasks);
   const title = shortTaskTitle(item.task.title);
   const team = item.team?.name ?? "未知組別";
+  const who = item.student_name ? `${team}・${item.student_name}` : team;
 
   return (
     <div className="relative border-b-2 border-ink bg-[#DEDCD4]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={full ? item.image_urls[0] || sharpImage(item) : sharpImage(item)}
-        alt={`${title}／${team}`}
+        alt={`${title}／${who}`}
         loading={full ? "eager" : "lazy"}
         decoding="async"
         className={full ? "max-h-[56vh] w-full object-contain" : "block w-full"}
       />
-            <div className="absolute inset-x-0 bottom-0 bg-ink/80 px-3 py-2 text-paper">
+      <div className="absolute inset-x-0 bottom-0 bg-ink/80 px-3 py-2 text-paper">
         <p className="text-[11px] font-black tracking-[0.12em] text-yellow">
           任務 {code}・{title}
         </p>
-        <p className="text-sm font-black">{team}</p>
+        <p className="text-sm font-black">{who}</p>
       </div>
     </div>
   );

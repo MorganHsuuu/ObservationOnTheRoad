@@ -99,6 +99,13 @@ export async function getStudentBoard(slug: string, teamId: string) {
   };
 }
 
+function storagePathFromPublicUrl(url: string) {
+  const marker = "/storage/v1/object/public/submissions/";
+  const index = url.indexOf(marker);
+  if (index < 0) return null;
+  return decodeURIComponent(url.slice(index + marker.length));
+}
+
 export async function uploadSubmission(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const slug = String(formData.get("slug") ?? "");
   const taskId = String(formData.get("taskId") ?? "");
@@ -110,10 +117,7 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   const lngRaw = formData.get("lng");
   const full = formData.get("full");
   const thumb = formData.get("thumb");
-
-  if (!(full instanceof File) || !(thumb instanceof File) || full.size === 0) {
-    return { ok: false, error: "請先拍一張照片" };
-  }
+  const hasNewPhoto = full instanceof File && thumb instanceof File && full.size > 0;
 
   const supabase = createAdminClient();
   const { data: event } = await supabase
@@ -148,44 +152,84 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
     .maybeSingle();
   if (!team) return { ok: false, error: "組別已不存在，請重新加入" };
 
-  const stamp = Date.now();
-  const fullPath = `${event.slug}/${task.id}/${team.code}-${stamp}.jpg`;
-  const thumbPath = `${event.slug}/${task.id}/${team.code}-${stamp}-thumb.webp`;
-
-  const fullUpload = await supabase.storage
-    .from("submissions")
-    .upload(fullPath, full, { contentType: "image/jpeg", upsert: false });
-  if (fullUpload.error) {
-    return { ok: false, error: "上傳失敗，再試一次" };
+  let existing: { id: string; image_urls: string[]; thumb_urls: string[] } | null = null;
+  if (studentId) {
+    const found = await supabase
+      .from("submissions")
+      .select("id, image_urls, thumb_urls")
+      .eq("task_id", task.id)
+      .eq("student_id", studentId)
+      .maybeSingle();
+    existing = found.data;
   }
 
-  const thumbUpload = await supabase.storage
-    .from("submissions")
-    .upload(thumbPath, thumb, { contentType: "image/webp", upsert: false });
-  if (thumbUpload.error) {
-    await supabase.storage.from("submissions").remove([fullPath]);
-    return { ok: false, error: "上傳失敗，再試一次" };
+  if (!hasNewPhoto && !existing) {
+    return { ok: false, error: "請先拍一張照片" };
   }
-
-  const fullUrl = supabase.storage.from("submissions").getPublicUrl(fullPath)
-    .data.publicUrl;
-  const thumbUrl = supabase.storage.from("submissions").getPublicUrl(thumbPath)
-    .data.publicUrl;
 
   const lat = latRaw ? Number(latRaw) : null;
   const lng = lngRaw ? Number(lngRaw) : null;
+  const coords = {
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+  };
+
+  let imageUrls = existing?.image_urls ?? [];
+  let thumbUrls = existing?.thumb_urls ?? [];
+  const uploaded: string[] = [];
+
+  if (hasNewPhoto && full instanceof File && thumb instanceof File) {
+    const stamp = Date.now();
+    const fullPath = `${event.slug}/${task.id}/${team.code}-${studentId || "anon"}-${stamp}.jpg`;
+    const thumbPath = `${event.slug}/${task.id}/${team.code}-${studentId || "anon"}-${stamp}-thumb.webp`;
+
+    const fullUpload = await supabase.storage
+      .from("submissions")
+      .upload(fullPath, full, { contentType: "image/jpeg", upsert: false });
+    if (fullUpload.error) {
+      return { ok: false, error: "上傳失敗，再試一次" };
+    }
+    uploaded.push(fullPath);
+
+    const thumbUpload = await supabase.storage
+      .from("submissions")
+      .upload(thumbPath, thumb, { contentType: "image/webp", upsert: false });
+    if (thumbUpload.error) {
+      await supabase.storage.from("submissions").remove(uploaded);
+      return { ok: false, error: "上傳失敗，再試一次" };
+    }
+    uploaded.push(thumbPath);
+
+    imageUrls = [supabase.storage.from("submissions").getPublicUrl(fullPath).data.publicUrl];
+    thumbUrls = [supabase.storage.from("submissions").getPublicUrl(thumbPath).data.publicUrl];
+  }
 
   const payload = {
     task_id: task.id,
     team_id: team.id,
-    image_urls: [fullUrl],
-    thumb_urls: [thumbUrl],
+    image_urls: imageUrls,
+    thumb_urls: thumbUrls,
     caption: caption || null,
-    lat: Number.isFinite(lat) ? lat : null,
-    lng: Number.isFinite(lng) ? lng : null,
+    lat: coords.lat,
+    lng: coords.lng,
     student_id: studentId || null,
     student_name: studentName || null,
   };
+
+  if (existing) {
+    const updated = await supabase.from("submissions").update(payload).eq("id", existing.id).select("id").single();
+    if (updated.error || !updated.data) {
+      if (uploaded.length) await supabase.storage.from("submissions").remove(uploaded);
+      return { ok: false, error: "上傳失敗，再試一次" };
+    }
+    if (hasNewPhoto) {
+      const oldPaths = [...existing.image_urls, ...existing.thumb_urls]
+        .map(storagePathFromPublicUrl)
+        .filter((path): path is string => Boolean(path));
+      if (oldPaths.length) await supabase.storage.from("submissions").remove(oldPaths);
+    }
+    return { ok: true, data: { id: updated.data.id } };
+  }
 
   let inserted: { id: string } | null = null;
   const first = await supabase.from("submissions").insert(payload).select("id").single();
@@ -205,11 +249,11 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
       .single();
     inserted = retry.data;
     if (retry.error || !inserted) {
-      await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
+      if (uploaded.length) await supabase.storage.from("submissions").remove(uploaded);
       return { ok: false, error: "上傳失敗，再試一次" };
     }
   } else if (first.error || !first.data) {
-    await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
+    if (uploaded.length) await supabase.storage.from("submissions").remove(uploaded);
     return { ok: false, error: "上傳失敗，再試一次" };
   } else {
     inserted = first.data;

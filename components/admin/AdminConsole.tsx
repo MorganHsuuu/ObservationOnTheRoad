@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
+  setEventFlag,
   setSubmissionFlags,
   setTaskStatus,
 } from "@/app/actions/admin";
@@ -53,6 +54,7 @@ export function AdminConsole({
   const [error, setError] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
+  const [galleryOn, setGalleryOn] = useState(event.gallery_public);
   const [progressTaskId, setProgressTaskId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [tasksOpen, setTasksOpen] = useState(false);
@@ -180,6 +182,25 @@ export function AdminConsole({
           </div>
           <div className="flex shrink-0 gap-2">
             <BroadcastHorn slug={event.slug} eventId={event.id} teams={teams} />
+            <button
+              type="button"
+              onClick={() => {
+                const next = !galleryOn;
+                setGalleryOn(next);
+                void setEventFlag(event.slug, "gallery_public", next).then((result) => {
+                  if (!result.ok) {
+                    setGalleryOn(!next);
+                    setError(result.error);
+                  }
+                });
+              }}
+              aria-label={galleryOn ? "關閉成果牆" : "開放成果牆"}
+              className={`flex h-11 w-11 items-center justify-center border-2 border-ink text-sm font-black ${
+                galleryOn ? "bg-yellow" : "bg-card"
+              }`}
+            >
+              牆
+            </button>
             <button
               type="button"
               onClick={() => setQrOpen(true)}

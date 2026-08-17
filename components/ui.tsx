@@ -11,8 +11,8 @@ export function Button({
 }: ButtonProps) {
   const styles = {
     primary: "bg-ink text-paper hover:bg-[#2B2B28] disabled:bg-muted",
-    ghost: "bg-card text-ink",
-    yellow: "bg-yellow text-ink",
+    ghost: "bg-card text-ink active:bg-yellow",
+    yellow: "bg-yellow text-ink active:bg-card",
     danger: "bg-danger text-white",
   }[variant];
 

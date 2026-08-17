@@ -24,7 +24,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const { slug, rail, groups } = useMemo(() => parseNav(pathname), [pathname]);
+  const { slug, groups } = useMemo(() => parseNav(pathname), [pathname]);
   const title = hereLabel(pathname, slug);
 
   return (
@@ -41,8 +41,8 @@ export function SiteChrome({ children }: { children: ReactNode }) {
         </button>
         <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3">
           <p className="truncate text-sm font-black tracking-[0.16em]">{title}</p>
-          <p className="hidden truncate text-[11px] font-black tracking-[0.18em] text-yellow-deep sm:block">
-            {rail}
+          <p className="shrink-0 text-[10px] font-black tracking-[0.22em] text-yellow-deep">
+            路上觀察
           </p>
         </div>
       </header>
@@ -124,27 +124,23 @@ function parseNav(pathname: string) {
   if (pathname.startsWith("/admin")) {
     return {
       slug,
-      rail: "老師 ・ 控制台",
       groups: adminGroups(slug),
     };
   }
   if (showSlug) {
     return {
       slug: showSlug,
-      rail: "設計課程 ・ 線上展覽",
       groups: publicGroups(showSlug),
     };
   }
   if (eventSlug) {
     return {
       slug: eventSlug,
-      rail: "設計課程 ・ 路上觀察",
       groups: publicGroups(eventSlug),
     };
   }
   return {
     slug: null,
-    rail: "設計課程 ・ 路上觀察",
     groups: [{ title: "入口", links: homeLinks() }],
   };
 }

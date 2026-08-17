@@ -19,6 +19,7 @@ function refreshEvent(slug: string) {
   revalidatePath(`/admin/e/${slug}`, "layout");
   revalidatePath(`/e/${slug}`, "layout");
   revalidatePath(`/e/${slug}`);
+  revalidatePath(`/e/${slug}/gallery`);
   revalidatePath(`/e/${slug}/task/[taskId]`);
   revalidatePath(`/show/${slug}`);
   revalidatePath("/admin/events");
