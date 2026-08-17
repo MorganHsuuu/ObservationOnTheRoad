@@ -124,23 +124,14 @@ async function resolveLiveUpload(input: { slug: string; taskId: string; teamId: 
     .maybeSingle();
   if (!event) return { ok: false as const, error: "找不到這個活動" };
 
-  const { data: task } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("id", input.taskId)
-    .eq("event_id", event.id)
-    .maybeSingle();
+  const [{ data: task }, { data: team }] = await Promise.all([
+    supabase.from("tasks").select("*").eq("id", input.taskId).eq("event_id", event.id).maybeSingle(),
+    supabase.from("teams").select("*").eq("id", input.teamId).eq("event_id", event.id).maybeSingle(),
+  ]);
   if (!task) return { ok: false as const, error: "找不到這個任務" };
   if (task.status !== "published") {
     return { ok: false as const, error: "這個任務已經截止囉" };
   }
-
-  const { data: team } = await supabase
-    .from("teams")
-    .select("*")
-    .eq("id", input.teamId)
-    .eq("event_id", event.id)
-    .maybeSingle();
   if (!team) return { ok: false as const, error: "組別已不存在，請重新加入" };
 
   return { ok: true as const, data: { supabase, event, task, team } };

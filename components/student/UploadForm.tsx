@@ -39,6 +39,12 @@ export function UploadForm({
   const [celebrate, setCelebrate] = useState(false);
   const [shownProgress, setShownProgress] = useState(0);
   const [boardTask, setBoardTask] = useState<TaskRow | null>(null);
+  const prepRef = useRef<{
+    file: File;
+    pair: Promise<Awaited<ReturnType<typeof compressForUpload>>>;
+    slot?: ReturnType<typeof prepareSubmissionUpload>;
+  } | null>(null);
+  const coordsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
 
   const liveTask = boardTask?.id === task.id ? boardTask : task;
   const closed = liveTask.status === "closed";
@@ -94,6 +100,25 @@ export function UploadForm({
       if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
       return URL.createObjectURL(next);
     });
+    const pair = compressForUpload(next);
+    const prep: NonNullable<typeof prepRef.current> = { file: next, pair };
+    prepRef.current = prep;
+    void pair
+      .then(() => {
+        if (prepRef.current !== prep) return;
+        const team = readStoredTeam(event.slug);
+        if (!team) return;
+        prep.slot = prepareSubmissionUpload({
+          slug: event.slug,
+          taskId: task.id,
+          teamId: team.teamId,
+          studentId: team.studentId ?? "",
+        });
+      })
+      .catch(() => undefined);
+    void locate().then((coords) => {
+      coordsRef.current = coords;
+    });
     window.setTimeout(() => captionRef.current?.focus(), 50);
   }
 
@@ -105,6 +130,7 @@ export function UploadForm({
     setPreview(existing ? sharpImage(existing) : null);
     setFile(null);
     setError("");
+    prepRef.current = null;
   }
 
   function cancelEdit() {
@@ -114,6 +140,7 @@ export function UploadForm({
     setCaption("");
     setError("");
     setProgress(0);
+    prepRef.current = null;
   }
 
   async function locate() {
@@ -122,7 +149,7 @@ export function UploadForm({
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve({ lat: null, lng: null }),
-        { timeout: 2500, maximumAge: 60000 },
+        { timeout: 800, maximumAge: 120000 },
       );
     });
   }
@@ -138,12 +165,17 @@ export function UploadForm({
     let fullPath = "";
     let thumbPath = "";
     if (pair) {
-      const slot = await prepareSubmissionUpload({
-        slug: event.slug,
-        taskId: task.id,
-        teamId: team.teamId,
-        studentId: team.studentId ?? "",
-      });
+      const cached = prepRef.current?.file === file ? prepRef.current.slot : undefined;
+      if (prepRef.current?.file === file) prepRef.current.slot = undefined;
+      const slot =
+        cached
+          ? await cached
+          : await prepareSubmissionUpload({
+              slug: event.slug,
+              taskId: task.id,
+              teamId: team.teamId,
+              studentId: team.studentId ?? "",
+            });
       if (!slot.ok) return slot;
       setProgress(82);
       let fullRatio = 0;
@@ -189,20 +221,25 @@ export function UploadForm({
     }
     setBusy(true);
     setError("");
-    setProgress(6);
-    setShownProgress(4);
+    setProgress(18);
+    setShownProgress(12);
     const firstTime = !existing;
-    const coordsPromise = locate();
     let pair: Awaited<ReturnType<typeof compressForUpload>> | null = null;
     try {
-      if (file) pair = await compressForUpload(file, setProgress);
+      if (file) {
+        pair =
+          prepRef.current?.file === file
+            ? await prepRef.current.pair
+            : await compressForUpload(file, setProgress);
+        setProgress(80);
+      }
     } catch {
       setError("照片處理失敗，換一張再試");
       setBusy(false);
       setProgress(0);
       return;
     }
-    const coords = await coordsPromise;
+    const coords = coordsRef.current;
 
     let lastError = "上傳失敗，再試一次";
     for (let attempt = 0; attempt < 2; attempt += 1) {
