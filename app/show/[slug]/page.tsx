@@ -1,0 +1,108 @@
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { GalleryView } from "@/components/gallery/GalleryView";
+import { EmptyState, Rail } from "@/components/ui";
+import { isSupabaseConfigured } from "@/lib/env";
+import { getAdminTeams, getPublicEvent, getPublicSubmissions, getVisibleTasks } from "@/lib/queries";
+import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
+import { formatTaipeiDate } from "@/lib/time";
+import type { Metadata } from "next";
+
+export async function generateMetadata(
+  props: PageProps<"/show/[slug]">,
+): Promise<Metadata> {
+  if (!isSupabaseConfigured()) return { title: "路上觀察" };
+  const { slug } = await props.params;
+  const event = await getPublicEvent(slug);
+  if (!event || !event.show_public) return { title: "展覽準備中" };
+  return {
+    title: `${event.title}｜路上觀察`,
+    description: event.story_md?.slice(0, 120) ?? "路上觀察成果展覽",
+    openGraph: {
+      title: event.title,
+      description: `${event.location_name ?? ""} ${formatTaipeiDate(event.event_date)}`.trim(),
+    },
+  };
+}
+
+export default async function ShowPage(props: PageProps<"/show/[slug]">) {
+  if (!isSupabaseConfigured()) notFound();
+  const { slug } = await props.params;
+  const search = await props.searchParams;
+  const event = await getPublicEvent(slug);
+  if (!event) notFound();
+  if (!event.show_public) {
+    return (
+      <div className="mx-auto max-w-[640px] px-4 py-20">
+        <EmptyState title="展覽準備中" body="策展還沒完成，晚點再來。" />
+      </div>
+    );
+  }
+
+  const [tasks, submissions, teams] = await Promise.all([
+    getVisibleTasks(event.id),
+    getPublicSubmissions(event.id),
+    getAdminTeams(event.id),
+  ]);
+  const featured = submissions.filter((item) => item.is_featured);
+  const deepLink = typeof search.s === "string" ? search.s : undefined;
+
+  return (
+    <div className="md:pl-11">
+      <Rail text="設計課程 ・ 線上展覽" />
+      <div className="mx-auto max-w-[1180px] px-5 pb-24">
+        <header className="relative pt-14 pb-10">
+          <div className="absolute top-10 left-0 hidden rotate-[-16deg] text-[52px] md:block">✈️</div>
+          <h1 className="text-[clamp(52px,11vw,120px)] leading-[0.82] font-black tracking-[-0.02em] md:ml-[70px]">
+            {event.title}
+          </h1>
+          <div className="latin mt-2 text-[clamp(22px,4vw,40px)] md:ml-[78px]">
+            Observation on the road
+          </div>
+          <p className="mt-8 max-w-2xl text-lg font-medium md:ml-[78px]">
+            {event.location_name} ・ {formatTaipeiDate(event.event_date)}
+          </p>
+          {event.story_md ? (
+            <p className="mt-4 max-w-2xl whitespace-pre-line font-medium md:ml-[78px]">
+              {event.story_md}
+            </p>
+          ) : null}
+        </header>
+
+        {tasks.map((task) => {
+          const photos = featured.filter((item) => item.task_id === task.id);
+          const fallback = submissions.filter((item) => item.task_id === task.id);
+          const show = photos.length > 0 ? photos : fallback.slice(0, 6);
+          if (show.length === 0) return null;
+          return (
+            <section key={task.id} className="mb-16">
+              <p className="text-xs font-black tracking-[0.2em] text-muted">
+                任務 {liveTaskCode(task.id, tasks)}
+              </p>
+              <h2 className="mt-1 text-3xl font-black">{shortTaskTitle(task.title)}</h2>
+              <p className="mt-3 max-w-2xl whitespace-pre-line font-medium">{task.prompt_md}</p>
+            </section>
+          );
+        })}
+
+        <Suspense>
+          <GalleryView
+            submissions={submissions}
+            tasks={tasks}
+            teams={teams.map(({ id, name }) => ({ id, name, event_id: event.id, code: "", members: null }))}
+            featuredFirst
+            deepLinkId={deepLink}
+          />
+        </Suspense>
+
+        <footer className="mt-20 border-t-2 border-ink pt-8">
+          <h2 className="text-2xl font-black">關於這門課</h2>
+          <p className="mt-3 max-w-xl font-medium">
+            路上觀察是一門用重新命名來重新看見的設計課。這次的場域是
+            {event.location_name ?? "現場"}，答案不在標示牌上。
+          </p>
+        </footer>
+      </div>
+    </div>
+  );
+}
