@@ -2,16 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DotsSixVertical, LockSimple } from "@phosphor-icons/react";
 import {
   deleteTask,
   duplicateTask,
   importTasksFromEvent,
-  moveTask,
+  reorderTasks,
 } from "@/app/actions/admin";
 import { TaskEditor } from "@/components/admin/TaskEditor";
 import { Card } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
-import { adminTaskCodeLabel, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
+import { shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
+import { taskCode } from "@/lib/time";
 import type { ActionResult, EventRow, TaskRow } from "@/lib/types";
 
 export function TaskManager({
@@ -34,8 +36,18 @@ export function TaskManager({
   const [error, setError] = useState("");
   const [source, setSource] = useState(otherEvents[0]?.slug ?? "");
   const [busy, setBusy] = useState(false);
+  const [items, setItems] = useState(tasks);
+  const [dragId, setDragId] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const itemsRef = useRef(items);
+  const dragIdRef = useRef<string | null>(null);
+  const originRef = useRef(tasks.map((task) => task.id).join(","));
   busyRef.current = busy;
+  itemsRef.current = items;
+
+  useEffect(() => {
+    if (!busyRef.current) setItems(tasks);
+  }, [tasks]);
 
   useEffect(() => {
     if (!busyRef.current) return;
@@ -63,6 +75,47 @@ export function TaskManager({
     setBusy(true);
     start("更新畫面");
     router.refresh();
+  }
+
+  function onPointerDown(taskId: string, event: React.PointerEvent<HTMLButtonElement>) {
+    if (busy || editing) return;
+    const task = itemsRef.current.find((item) => item.id === taskId);
+    if (!task || task.status !== "draft") return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    originRef.current = itemsRef.current.map((item) => item.id).join(",");
+    dragIdRef.current = taskId;
+    setDragId(taskId);
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    const dragId = dragIdRef.current;
+    if (!dragId) return;
+    const over = [...document.querySelectorAll<HTMLElement>("[data-task-row]")].find((row) => {
+      const rect = row.getBoundingClientRect();
+      return event.clientY >= rect.top && event.clientY < rect.bottom;
+    });
+    const overId = over?.dataset.taskRow;
+    if (!overId || overId === dragId) return;
+    setItems((list) => {
+      const from = list.findIndex((task) => task.id === dragId);
+      const to = list.findIndex((task) => task.id === overId);
+      if (from < 0 || to < 0 || from === to) return list;
+      if (list[from]?.status !== "draft" || list[to]?.status !== "draft") return list;
+      const next = [...list];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
+  function onPointerUp() {
+    if (!dragIdRef.current) return;
+    dragIdRef.current = null;
+    setDragId(null);
+    const ids = itemsRef.current.map((task) => task.id);
+    if (ids.join(",") === originRef.current) return;
+    void mutate("排序中", () => reorderTasks(slug, ids));
   }
 
   return (
@@ -130,90 +183,113 @@ export function TaskManager({
         </Card>
       ) : null}
 
+      <p className="text-sm font-medium text-muted">
+        左邊是排序。第四個發布的會變成任務 04，後面往後順延。已發布不能拖。
+      </p>
       <div className="space-y-2">
-        {tasks.map((task, index) => (
-          <Card key={task.id} className="px-3 py-3">
-            {editing?.id === task.id ? (
-              <div>
-                <h2 className="mb-3 text-lg font-black">
-                  編輯任務 {adminTaskCodeLabel(task, tasks)}
-                </h2>
-                <TaskEditor
-                  slug={slug}
-                  initial={task}
-                  stayPending
-                  onCancel={() => setEditing(null)}
-                  onSaved={afterSave}
-                />
+        {items.map((task, index) => {
+          const code = taskCode(index + 1);
+          const locked = task.status !== "draft";
+          const published = task.status === "published";
+          return (
+            <div key={task.id} data-task-row={task.id} className="flex items-stretch gap-2">
+              <div className="flex w-12 shrink-0 flex-col items-center justify-center">
+                <span className="text-[11px] font-black tracking-[0.16em] text-muted">任務</span>
+                <span className="text-xl font-black leading-none">{code}</span>
               </div>
-            ) : (
-              <div className="flex items-start gap-3">
-                <div className="flex flex-col gap-1">
-                  <button
-                    type="button"
-                    disabled={busy || index === 0}
-                    className="min-h-11 px-2 font-black disabled:text-muted"
-                    onClick={() => void mutate("排序中", () => moveTask(slug, task.id, "up"))}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || index === tasks.length - 1}
-                    className="min-h-11 px-2 font-black disabled:text-muted"
-                    onClick={() => void mutate("排序中", () => moveTask(slug, task.id, "down"))}
-                  >
-                    ↓
-                  </button>
-                </div>
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-black tracking-[0.16em] text-muted">
-                      任務 {adminTaskCodeLabel(task, tasks)}
-                    </span>
-                    <span
-                      className={`border-2 border-ink px-1.5 py-0.5 text-[11px] font-black ${
-                        task.status === "published" ? "bg-yellow" : ""
-                      }`}
-                    >
-                      {taskStatusLabel(task.status)}
-                    </span>
+              <section
+                className={`relative min-w-0 flex-1 overflow-hidden border-2 border-ink ${
+                  task.status === "closed"
+                    ? "bg-[#DEDCD4]"
+                    : locked
+                      ? "bg-card"
+                      : "border-dashed bg-card"
+                } ${dragId === task.id ? "opacity-60" : ""}`}
+              >
+                {editing?.id === task.id ? (
+                  <div className="p-3">
+                    <h2 className="mb-3 text-lg font-black">編輯任務 {code}</h2>
+                    <TaskEditor
+                      slug={slug}
+                      initial={task}
+                      stayPending
+                      onCancel={() => setEditing(null)}
+                      onSaved={afterSave}
+                    />
                   </div>
-                  <div className="mt-1 font-black">{shortTaskTitle(task.title)}</div>
-                  <p className="mt-1 text-sm whitespace-pre-line">{task.prompt_md}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="min-h-11 border-2 border-ink bg-ink px-3 text-sm font-black text-paper disabled:opacity-50"
-                      onClick={() => setEditing(task)}
-                    >
-                      編輯題目
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black disabled:opacity-50"
-                      onClick={() => void mutate("複製中", () => duplicateTask(slug, task.id))}
-                    >
-                      複製
-                    </button>
-                    {task.status === "draft" ? (
+                ) : (
+                  <div className="relative min-h-[92px] py-3 pr-16 pl-3">
+                    {locked ? (
+                      <div
+                        className="absolute top-1 right-1 flex h-12 w-12 items-center justify-center text-muted"
+                        title="已發布，不能再排"
+                      >
+                        <LockSimple weight="bold" size={26} aria-hidden />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label="拖動調整順序"
+                        disabled={busy}
+                        onPointerDown={(event) => onPointerDown(task.id, event)}
+                        onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp}
+                        onPointerCancel={onPointerUp}
+                        className="absolute top-1 right-1 flex h-12 w-12 cursor-grab touch-none items-center justify-center text-ink active:cursor-grabbing disabled:opacity-50"
+                      >
+                        <DotsSixVertical weight="bold" size={32} aria-hidden />
+                      </button>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`border-2 border-ink px-1.5 py-0.5 text-[11px] font-black ${
+                          published ? "bg-yellow" : "bg-card"
+                        }`}
+                      >
+                        {taskStatusLabel(task.status)}
+                      </span>
+                      {locked ? (
+                        <span className="text-[11px] font-black tracking-[0.12em] text-muted">
+                          不能移動
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 font-black">{shortTaskTitle(task.title)}</div>
+                    <p className="mt-1 text-sm whitespace-pre-line">{task.prompt_md}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="min-h-11 border-2 border-ink bg-ink px-3 text-sm font-black text-paper disabled:opacity-50"
+                        onClick={() => setEditing(task)}
+                      >
+                        編輯題目
+                      </button>
                       <button
                         type="button"
                         disabled={busy}
                         className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black disabled:opacity-50"
-                        onClick={() => void mutate("刪除中", () => deleteTask(slug, task.id))}
+                        onClick={() => void mutate("複製中", () => duplicateTask(slug, task.id))}
                       >
-                        刪除
+                        複製
                       </button>
-                    ) : null}
+                      {task.status === "draft" ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black disabled:opacity-50"
+                          onClick={() => void mutate("刪除中", () => deleteTask(slug, task.id))}
+                        >
+                          刪除
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
-          </Card>
-        ))}
+                )}
+              </section>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

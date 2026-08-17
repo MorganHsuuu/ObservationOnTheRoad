@@ -29,7 +29,7 @@ export default async function TaskPage(props: PageProps<"/e/[slug]/task/[taskId]
         </p>
       ) : null}
       <div className="mt-6">
-        <UploadForm event={event} task={task} />
+        <UploadForm event={event} task={task} code={liveTaskCode(task.id, siblings)} />
       </div>
     </div>
   );

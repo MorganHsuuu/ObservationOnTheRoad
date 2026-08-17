@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { arrangeAfterDraft, arrangeAfterPublish } from "@/lib/task-utils";
 import { finalizeEventPin, finalizeTeamCode, isEventPin, isTeamCode, teamNameFromCode } from "@/lib/team-code";
+import { setAdminEventPinCookie } from "@/lib/event-pin-server";
 import {
   getAdminEvent,
   getAdminSubmissions,
@@ -100,6 +102,32 @@ export async function updateEvent(slug: string, formData: FormData): Promise<Act
     .eq("slug", slug);
   if (error) return { ok: false, error: error.message };
   refreshEvent(slug);
+  return { ok: true, data: undefined };
+}
+
+export async function updateEventPin(slug: string, raw: string): Promise<ActionResult> {
+  await requireAdmin();
+  const pin = finalizeEventPin(raw);
+  if (pin && !isEventPin(pin)) return { ok: false, error: "登入密碼請填四碼數字，或不填" };
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("events")
+    .update({ entry_pin: pin || null })
+    .eq("slug", slug);
+  if (error) return { ok: false, error: error.message };
+  refreshEvent(slug);
+  return { ok: true, data: undefined };
+}
+
+export async function verifyAdminEventPin(slug: string, raw: string): Promise<ActionResult> {
+  await requireAdmin();
+  const entered = finalizeEventPin(raw);
+  const event = await getAdminEvent(slug);
+  if (!event) return { ok: false, error: "找不到場次" };
+  if (event.entry_pin && entered !== event.entry_pin) {
+    return { ok: false, error: "密碼不對" };
+  }
+  await setAdminEventPinCookie(slug);
   return { ok: true, data: undefined };
 }
 
@@ -347,26 +375,46 @@ export async function moveTask(
   if (!event) return { ok: false, error: "找不到場次" };
   const { data: tasks } = await supabase
     .from("tasks")
-    .select("id, order_index")
+    .select("id")
     .eq("event_id", event.id)
     .order("order_index");
-  if (!tasks) return { ok: false, error: "讀取題庫失敗" };
-  const index = tasks.findIndex((task) => task.id === taskId);
+  const ids = (tasks ?? []).map((task) => task.id);
+  const index = ids.indexOf(taskId);
   const swapWith = direction === "up" ? index - 1 : index + 1;
-  if (index < 0 || swapWith < 0 || swapWith >= tasks.length) {
+  if (index < 0 || swapWith < 0 || swapWith >= ids.length) {
     return { ok: true, data: undefined };
   }
-  const a = tasks[index];
-  const b = tasks[swapWith];
-  const { error: first } = await supabase
-    .from("tasks")
-    .update({ order_index: b.order_index })
-    .eq("id", a.id);
-  const { error: second } = await supabase
-    .from("tasks")
-    .update({ order_index: a.order_index })
-    .eq("id", b.id);
-  if (first || second) return { ok: false, error: (first ?? second)?.message ?? "排序失敗" };
+  const next = [...ids];
+  const [moved] = next.splice(index, 1);
+  next.splice(swapWith, 0, moved);
+  return reorderTasks(slug, next);
+}
+
+export async function reorderTasks(slug: string, orderedIds: string[]): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = createAdminClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (!event) return { ok: false, error: "找不到場次" };
+  const { data: tasks } = await supabase.from("tasks").select("id").eq("event_id", event.id);
+  const allowed = new Set((tasks ?? []).map((task) => task.id));
+  if (
+    orderedIds.length !== allowed.size ||
+    orderedIds.some((id) => !allowed.has(id)) ||
+    new Set(orderedIds).size !== orderedIds.length
+  ) {
+    return { ok: false, error: "題庫已更新，請重整後再排" };
+  }
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from("tasks").update({ order_index: index + 1 }).eq("id", id),
+    ),
+  );
+  const failed = results.find((item) => item.error)?.error;
+  if (failed) return { ok: false, error: failed.message };
   refreshEvent(slug);
   return { ok: true, data: undefined };
 }
@@ -378,6 +426,12 @@ export async function setTaskStatus(
 ): Promise<ActionResult> {
   await requireAdmin();
   const supabase = createAdminClient();
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("id, event_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  if (!task) return { ok: false, error: "找不到任務" };
   const { error } = await supabase
     .from("tasks")
     .update({
@@ -386,6 +440,24 @@ export async function setTaskStatus(
     })
     .eq("id", taskId);
   if (error) return { ok: false, error: error.message };
+
+  const { data: rows } = await supabase
+    .from("tasks")
+    .select("id, status")
+    .eq("event_id", task.event_id)
+    .order("order_index");
+  const arranged =
+    status === "published"
+      ? arrangeAfterPublish(rows ?? [], taskId)
+      : status === "draft"
+        ? arrangeAfterDraft(rows ?? [], taskId)
+        : (rows ?? []);
+  await Promise.all(
+    arranged.map((row, index) =>
+      supabase.from("tasks").update({ order_index: index + 1 }).eq("id", row.id),
+    ),
+  );
+
   if (status === "published") {
     await supabase.from("events").update({ status: "live" }).eq("slug", slug);
   }

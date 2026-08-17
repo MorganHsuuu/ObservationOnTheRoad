@@ -119,6 +119,77 @@
   animation: done-pop 0.5s ease-out;
 }
 
+@keyframes stamp-slam {
+  0% {
+    transform: rotate(-22deg) scale(1.7);
+    opacity: 0;
+  }
+  58% {
+    transform: rotate(-6deg) scale(0.9);
+    opacity: 1;
+  }
+  78% {
+    transform: rotate(-12deg) scale(1.05);
+  }
+  100% {
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+.done-burst-stamp {
+  display: block;
+  width: 100%;
+  border: 6px solid var(--ink);
+  background: var(--yellow);
+  padding: 28px 18px 22px;
+  text-align: center;
+  box-shadow: 10px 10px 0 var(--ink);
+  animation: stamp-slam 0.52s cubic-bezier(0.18, 1.2, 0.32, 1) both;
+}
+
+@keyframes spark-fly {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--spark-x), var(--spark-y)) scale(0.4) rotate(80deg);
+  }
+}
+
+.done-burst-spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid var(--ink);
+  background: var(--yellow);
+  animation: spark-fly 0.7s ease-out 0.18s both;
+}
+
+.done-burst-spark-a {
+  --spark-x: -118px;
+  --spark-y: -86px;
+}
+
+.done-burst-spark-b {
+  --spark-x: 124px;
+  --spark-y: -72px;
+}
+
+.done-burst-spark-c {
+  --spark-x: -108px;
+  --spark-y: 92px;
+}
+
+.done-burst-spark-d {
+  --spark-x: 112px;
+  --spark-y: 98px;
+}
+
 @keyframes heart-pop {
   0% {
     transform: scale(0.7);

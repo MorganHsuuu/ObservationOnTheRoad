@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Modal } from "@/components/ui";
+import { publicJoinUrl } from "@/lib/public-url";
 
 export function QrModal({
   open,
@@ -14,7 +15,7 @@ export function QrModal({
   onClose: () => void;
 }) {
   const [src, setSrc] = useState("");
-  const url = typeof window === "undefined" ? "" : `${window.location.origin}/e/${slug}`;
+  const url = publicJoinUrl(slug);
 
   useEffect(() => {
     if (!open || !url) return;

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getStudentBoard, prepareSubmissionUpload, uploadSubmission } from "@/app/actions/student";
+import { DoneBurst } from "@/components/student/DoneBurst";
 import { Button, Card } from "@/components/ui";
 import { compressForUpload } from "@/lib/compress";
 import { putFileWithProgress } from "@/lib/direct-upload";
@@ -16,11 +17,13 @@ export function UploadForm({
   task,
   compact = false,
   onUploaded,
+  code,
 }: {
   event: EventRow;
   task: TaskRow;
   compact?: boolean;
-  onUploaded?: () => void;
+  onUploaded?: (firstTime: boolean) => void;
+  code?: string;
 }) {
   const router = useRouter();
   const [mine, setMine] = useState<SubmissionRow[]>([]);
@@ -217,7 +220,7 @@ export function UploadForm({
           });
           setJustSaved(true);
           setCelebrate(firstTime);
-          onUploaded?.();
+          onUploaded?.(firstTime);
           const team = readStoredTeam(event.slug);
           if (team) {
             void getStudentBoard(event.slug, team.teamId).then((board) => {
@@ -249,6 +252,9 @@ export function UploadForm({
 
   return (
     <div className="space-y-4">
+      {celebrate ? (
+        <DoneBurst code={code} onClose={() => setCelebrate(false)} />
+      ) : null}
       {closed ? (
         <Card className="px-4 py-5">
           <p className="font-black">這個任務已經截止囉</p>
@@ -258,7 +264,7 @@ export function UploadForm({
       {existing && !editing ? (
         <Card className="overflow-hidden">
           {justSaved ? (
-            <div className="bg-yellow px-3.5 py-2 text-sm font-black">已送出，這題每人一張。</div>
+            <div className="bg-yellow px-3.5 py-3 text-base font-black">這題完成了。每人一張。</div>
           ) : (
             <div className="px-3.5 py-2 text-[11px] font-black tracking-[0.2em] text-muted">
               你的回傳

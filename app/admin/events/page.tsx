@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/env";
 import { getAdminEvents } from "@/lib/queries";
 import { formatTaipeiDate } from "@/lib/time";
 import { logoutAdmin } from "@/app/actions/auth";
+import { ShareJoinButton } from "@/components/admin/ShareJoinButton";
 
 export default async function EventsPage() {
   if (!(await isAdminAuthed())) redirect("/admin");
@@ -48,17 +49,16 @@ export default async function EventsPage() {
           </p>
         ) : (
           events.map((event) => (
-            <Link
-              key={event.id}
-              href={`/admin/e/${event.slug}`}
-              className="block border-2 border-ink bg-card px-4 py-4"
-            >
-              <div className="text-xs font-black tracking-[0.2em] text-muted">
-                {event.status} ・ {formatTaipeiDate(event.event_date)}
-              </div>
-              <div className="mt-1 text-2xl font-black">{event.title}</div>
-              <div className="text-sm font-medium text-muted">{event.location_name}</div>
-            </Link>
+            <div key={event.id} className="flex border-2 border-ink bg-card">
+              <Link href={`/admin/e/${event.slug}`} className="min-w-0 flex-1 px-4 py-4">
+                <div className="text-xs font-black tracking-[0.2em] text-muted">
+                  {event.status} ・ {formatTaipeiDate(event.event_date)}
+                </div>
+                <div className="mt-1 text-2xl font-black">{event.title}</div>
+                <div className="text-sm font-medium text-muted">{event.location_name}</div>
+              </Link>
+              <ShareJoinButton slug={event.slug} title={event.title} />
+            </div>
           ))
         )}
       </div>

@@ -8,7 +8,7 @@ import { ProgressPie } from "@/components/ProgressPie";
 import { BlockHead, Button, Card, Modal, Prompt } from "@/components/ui";
 import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
-import { adminTaskCodeLabel, boardTaskCode, currentTask, liveTaskCode, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
+import { adminTaskCodeLabel, arrangeAfterDraft, arrangeAfterPublish, boardTaskCode, currentTask, liveTaskCode, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
 import { teamLabel } from "@/lib/team-code";
 import { teamTaskProgress } from "@/lib/progress";
 import { formatTaipeiTime, nowTaipeiLabel } from "@/lib/time";
@@ -137,13 +137,17 @@ export function AdminConsole({
       setError(result.error);
       return;
     }
-    setTaskList((list) =>
-      list.map((item) =>
+    setTaskList((list) => {
+      const next = list.map((item) =>
         item.id === task.id
-          ? { ...item, status: "published", published_at: new Date().toISOString() }
+          ? { ...item, status: "published" as const, published_at: new Date().toISOString() }
           : item,
-      ),
-    );
+      );
+      return arrangeAfterPublish(next, task.id).map((item, index) => ({
+        ...item,
+        order_index: index + 1,
+      }));
+    });
     setProgressTaskId(task.id);
     setUndo({ task, left: 8 });
     setConfirm(null);
@@ -155,11 +159,15 @@ export function AdminConsole({
       setError(result.error);
       return;
     }
-    setTaskList((list) =>
-      list.map((item) =>
-        item.id === task.id ? { ...item, status: "draft", published_at: null } : item,
-      ),
-    );
+    setTaskList((list) => {
+      const next = list.map((item) =>
+        item.id === task.id ? { ...item, status: "draft" as const, published_at: null } : item,
+      );
+      return arrangeAfterDraft(next, task.id).map((item, index) => ({
+        ...item,
+        order_index: index + 1,
+      }));
+    });
     setUndo(null);
   }
 
@@ -169,8 +177,8 @@ export function AdminConsole({
       setError(result.error);
       return;
     }
-    setTaskList((list) =>
-      list.map((item) =>
+    setTaskList((list) => {
+      const next = list.map((item) =>
         item.id === task.id
           ? {
               ...item,
@@ -178,8 +186,21 @@ export function AdminConsole({
               published_at: status === "published" ? new Date().toISOString() : item.published_at,
             }
           : item,
-      ),
-    );
+      );
+      if (status === "published") {
+        return arrangeAfterPublish(next, task.id).map((item, index) => ({
+          ...item,
+          order_index: index + 1,
+        }));
+      }
+      if (status === "draft") {
+        return arrangeAfterDraft(next, task.id).map((item, index) => ({
+          ...item,
+          order_index: index + 1,
+        }));
+      }
+      return next;
+    });
     setMenuId(null);
   }
 

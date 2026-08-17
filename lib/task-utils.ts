@@ -3,6 +3,7 @@ import type { TaskRow } from "@/lib/types";
 
 type NumberableTask = Pick<TaskRow, "id" | "order_index"> & {
   status?: TaskRow["status"];
+  published_at?: string | null;
 };
 
 export function sortTasksByOrder<T extends Pick<TaskRow, "order_index">>(tasks: T[]) {
@@ -10,10 +11,35 @@ export function sortTasksByOrder<T extends Pick<TaskRow, "order_index">>(tasks: 
 }
 
 export function releasedTasks<T extends NumberableTask>(tasks: T[]) {
-  return sortTasksByOrder(tasks.filter((task) => task.status !== "draft"));
+  return sortTasksByOrder(tasks.filter((task) => task.status && task.status !== "draft"));
 }
 
-/** 學生看到的題號：只算已發布／已截止，依題庫順序重編 01、02、03，沒發出的不佔號。 */
+/** 第四個發布的題，就算原本排第七，也排到已發布區塊最後，後面草稿往後順延。 */
+export function arrangeAfterPublish<T extends { id: string; status?: TaskRow["status"] }>(
+  tasks: T[],
+  taskId: string,
+) {
+  const current = tasks.find((task) => task.id === taskId);
+  if (!current) return tasks;
+  const others = tasks.filter((task) => task.id !== taskId);
+  const released = others.filter((task) => task.status && task.status !== "draft");
+  const drafts = others.filter((task) => !task.status || task.status === "draft");
+  return [...released, current, ...drafts];
+}
+
+export function arrangeAfterDraft<T extends { id: string; status?: TaskRow["status"] }>(
+  tasks: T[],
+  taskId: string,
+) {
+  const current = tasks.find((task) => task.id === taskId);
+  if (!current) return tasks;
+  const others = tasks.filter((task) => task.id !== taskId);
+  const released = others.filter((task) => task.status && task.status !== "draft");
+  const drafts = others.filter((task) => !task.status || task.status === "draft");
+  return [...released, ...drafts, current];
+}
+
+/** 學生看到的題號：已發布依推播順序；草稿接在後面往後順延。 */
 export function liveTaskNumber(taskId: string, tasks: NumberableTask[]) {
   const released = releasedTasks(tasks);
   const index = released.findIndex((task) => task.id === taskId);
@@ -21,22 +47,18 @@ export function liveTaskNumber(taskId: string, tasks: NumberableTask[]) {
 }
 
 export function liveTaskCode(taskId: string, tasks: NumberableTask[]) {
-  return taskCode(liveTaskNumber(taskId, tasks));
+  const number = liveTaskNumber(taskId, tasks);
+  return number > 0 ? taskCode(number) : "";
 }
 
-/** 任務板上的題號：依題庫排列重編 01、02、03，刪題留下的空洞不顯示。 */
+/** 任務板上的題號：畫面順序 01、02、03。發布後會插到已發布後面，草稿往後順延。 */
 export function boardTaskCode(taskId: string, tasks: NumberableTask[]) {
   const index = sortTasksByOrder(tasks).findIndex((task) => task.id === taskId);
   return taskCode(index >= 0 ? index + 1 : 0);
 }
 
 export function adminTaskCodeLabel(task: NumberableTask, tasks: NumberableTask[]) {
-  if (task.status === "draft") return taskCode(task.order_index);
-  const live = liveTaskNumber(task.id, tasks);
-  if (live > 0 && live !== task.order_index) {
-    return `${taskCode(task.order_index)}→${taskCode(live)}`;
-  }
-  return taskCode(live || task.order_index);
+  return boardTaskCode(task.id, tasks);
 }
 
 export function currentTask(tasks: TaskRow[]) {

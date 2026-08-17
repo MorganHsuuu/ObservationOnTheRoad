@@ -7,6 +7,10 @@ export function eventPinCookieName(slug: string) {
   return `observe-pin-${slug}`;
 }
 
+export function adminEventPinCookieName(slug: string) {
+  return `observe-admin-pin-${slug}`;
+}
+
 export function eventPinStorageKey(slug: string) {
   return `observe:${slug}:pin`;
 }

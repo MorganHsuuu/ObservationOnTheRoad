@@ -37,6 +37,7 @@ export function EventHome({
   const [banner, setBanner] = useState<TaskRow | null>(null);
   const [openNotes, setOpenNotes] = useState(false);
   const [pickedId, setPickedId] = useState<string | null>(null);
+  const [justDoneId, setJustDoneId] = useState<string | null>(null);
 
   const load = useCallback(
     async (stored: StoredTeam, silent = false) => {
@@ -195,6 +196,7 @@ export function EventHome({
             doneIds={doneIds}
             currentId={latest?.id}
             selectedId={selected?.id}
+            justDoneId={justDoneId}
             onSelect={setPickedId}
           />
         ) : null}
@@ -229,14 +231,18 @@ export function EventHome({
                     event={eventState}
                     task={selected}
                     compact
-                    onUploaded={() => void load(team)}
+                    code={boardTaskCode(selected.id, allTasks)}
+                    onUploaded={(firstTime) => {
+                      if (firstTime) setJustDoneId(selected.id);
+                      void load(team);
+                    }}
                   />
                 </div>
               </div>
             </Card>
           ) : selected?.status === "draft" ? (
             <Card className="px-4 py-6">
-              <p className="font-black">任務 {boardTaskCode(selected.id, allTasks)} 尚未公布</p>
+              <p className="font-black">任務尚未公布</p>
               <p className="mt-2 text-sm font-medium text-muted">老師一出題，這裡就會出現。</p>
             </Card>
           ) : (
@@ -290,12 +296,14 @@ function TaskTrack({
   doneIds,
   currentId,
   selectedId,
+  justDoneId,
   onSelect,
 }: {
   tasks: TaskRow[];
   doneIds: Set<string>;
   currentId?: string;
   selectedId?: string;
+  justDoneId?: string | null;
   onSelect: (taskId: string) => void;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -354,7 +362,7 @@ function TaskTrack({
                           : selected
                             ? "border-ink bg-card"
                             : "border-ink"
-                  }`}
+                  } ${justDoneId === task.id ? "done-pop" : ""}`}
                 >
                   {done ? <Check weight="bold" size={16} className="block" aria-hidden /> : null}
                 </span>
