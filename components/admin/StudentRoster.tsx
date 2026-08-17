@@ -5,6 +5,7 @@ import { getAdminRoom } from "@/app/actions/admin";
 import { Card } from "@/components/ui";
 import { isStudentOnline } from "@/lib/broadcast";
 import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
+import { teamLabel } from "@/lib/team-code";
 import type { ParticipantRow, SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
 
 export function StudentRoster({
@@ -13,12 +14,14 @@ export function StudentRoster({
   teams,
   tasks,
   submissions,
+  refreshToken,
 }: {
   slug: string;
   eventId: string;
   teams: TeamRow[];
   tasks: TaskRow[];
   submissions: SubmissionWithMeta[];
+  refreshToken?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [people, setPeople] = useState<ParticipantRow[]>([]);
@@ -36,7 +39,7 @@ export function StudentRoster({
       window.clearTimeout(start);
       window.clearInterval(poll);
     };
-  }, [eventId, load]);
+  }, [eventId, load, refreshToken]);
 
   const teamMap = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
   const released = useMemo(
@@ -90,6 +93,11 @@ export function StudentRoster({
           </p>
         ) : (
           <div className="border-t-2 border-ink">
+            <div className="flex gap-3 border-b-2 border-ink px-3.5 py-2 text-[11px] font-black tracking-[0.2em] text-muted">
+              <span className="w-2.5 shrink-0" />
+              <span className="w-[4.5rem] shrink-0">組別</span>
+              <span className="flex-1">學生</span>
+            </div>
             {rows.map((person) => {
               const team = teamMap.get(person.team_id);
               const done = doneByStudent.get(person.student_id) ?? new Set<string>();
@@ -102,11 +110,11 @@ export function StudentRoster({
                     }`}
                     title={online ? "在線" : "離線"}
                   />
+                  <span className="w-[4.5rem] shrink-0 pt-0.5 text-xs font-black">{teamLabel(team)}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2">
                       <span className="font-black">{person.student_name}</span>
                       <span className="text-xs font-black text-muted">{person.student_id}</span>
-                      <span className="text-xs font-black">{team?.name ?? "未知組別"}</span>
                     </div>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {released.length === 0 ? (

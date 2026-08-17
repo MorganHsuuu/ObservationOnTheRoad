@@ -105,7 +105,7 @@ export async function getAdminTeams(eventId: string) {
     .from("teams")
     .select("*")
     .eq("event_id", eventId)
-    .order("name", { ascending: true });
+    .order("code", { ascending: true });
   if (error) throw error;
   return (data ?? []) as TeamRow[];
 }

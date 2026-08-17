@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import {
-  setEventFlag,
-  setSubmissionFlags,
-  setTaskStatus,
-} from "@/app/actions/admin";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { getAdminLive, setSubmissionFlags, setTaskStatus } from "@/app/actions/admin";
 import { TaskEditor } from "@/components/admin/TaskEditor";
 import { BlockHead, Button, Card, Modal, Prompt } from "@/components/ui";
+import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
 import { adminTaskCodeLabel, currentTask, liveTaskCode, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
-import { formatTaipeiTime } from "@/lib/time";
+import { teamLabel } from "@/lib/team-code";
+import { formatTaipeiTime, nowTaipeiLabel } from "@/lib/time";
 import type {
   EventRow,
   SubmissionWithMeta,
@@ -33,8 +31,11 @@ export function AdminConsole({
   submissions: SubmissionWithMeta[];
 }) {
   const [taskList, setTaskList] = useState(tasks);
+  const [teamList, setTeamList] = useState(teams);
   const [feed, setFeed] = useState(submissions);
   const [pendingNew, setPendingNew] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState("");
   const online = useSyncExternalStore(
     (onChange) => {
       window.addEventListener("online", onChange);
@@ -54,7 +55,6 @@ export function AdminConsole({
   const [error, setError] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
-  const [galleryOn, setGalleryOn] = useState(event.gallery_public);
   const [progressTaskId, setProgressTaskId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [tasksOpen, setTasksOpen] = useState(false);
@@ -71,6 +71,30 @@ export function AdminConsole({
       feed.filter((item) => item.task_id === activeId && item.team_id).map((item) => item.team_id as string),
     );
   }, [activeId, feed]);
+
+  const loadLive = useCallback(async () => {
+    setBusy(true);
+    const result = await getAdminLive(event.slug);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setTaskList(result.data.tasks);
+    setTeamList(result.data.teams);
+    setFeed(result.data.submissions);
+    setPendingNew(0);
+    setUpdatedAt(nowTaipeiLabel());
+  }, [event.slug]);
+
+  const refresh = useCallback(() => {
+    void loadLive();
+  }, [loadLive]);
+  useChromeTools({ onRefresh: refresh, busy, updatedAt });
+
+  useEffect(() => {
+    setUpdatedAt(nowTaipeiLabel());
+  }, []);
 
   useEffect(() => {
     if (!undo) return;
@@ -181,26 +205,7 @@ export function AdminConsole({
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
-            <BroadcastHorn slug={event.slug} eventId={event.id} teams={teams} />
-            <button
-              type="button"
-              onClick={() => {
-                const next = !galleryOn;
-                setGalleryOn(next);
-                void setEventFlag(event.slug, "gallery_public", next).then((result) => {
-                  if (!result.ok) {
-                    setGalleryOn(!next);
-                    setError(result.error);
-                  }
-                });
-              }}
-              aria-label={galleryOn ? "關閉成果牆" : "開放成果牆"}
-              className={`flex h-11 w-11 items-center justify-center border-2 border-ink text-sm font-black ${
-                galleryOn ? "bg-yellow" : "bg-card"
-              }`}
-            >
-              牆
-            </button>
+            <BroadcastHorn slug={event.slug} eventId={event.id} teams={teamList} />
             <button
               type="button"
               onClick={() => setQrOpen(true)}
@@ -226,10 +231,10 @@ export function AdminConsole({
         <Card className="mt-4">
           <div className="flex items-center justify-between border-b-2 border-ink px-3.5 py-2.5">
             <h2 className="text-[13px] font-black tracking-[0.2em] text-muted">組別</h2>
-            <span className="text-[13px] font-black">{doneTeamIds.size}/{teams.length} 已交</span>
+            <span className="text-[13px] font-black">{doneTeamIds.size}/{teamList.length} 已交</span>
           </div>
           <div className="flex flex-wrap gap-2.5 p-3">
-            {teams.map((team) => {
+            {teamList.map((team) => {
               const done = doneTeamIds.has(team.id);
               return (
                 <div key={team.id} className="w-[42px] text-center">
@@ -237,7 +242,7 @@ export function AdminConsole({
                     className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${done ? "bg-ink" : ""}`}
                   />
                   <span className={`text-[11px] font-black ${done ? "text-ink" : "text-muted"}`}>
-                    {team.name.replace("第 ", "").replace(" 組", "")}組
+                    {team.code}
                   </span>
                 </div>
               );
@@ -248,9 +253,10 @@ export function AdminConsole({
         <StudentRoster
           slug={event.slug}
           eventId={event.id}
-          teams={teams}
+          teams={teamList}
           tasks={taskList}
           submissions={feed}
+          refreshToken={updatedAt}
         />
 
         {nextDraft ? (
@@ -308,7 +314,7 @@ export function AdminConsole({
                   </span>
                   <span className="text-xs font-black text-muted">
                     {task.status !== "draft"
-                      ? `${feed.filter((item) => item.task_id === task.id).length}/${teams.length}`
+                      ? `${feed.filter((item) => item.task_id === task.id).length}/${teamList.length}`
                       : ""}
                   </span>
                   <button
@@ -357,7 +363,7 @@ export function AdminConsole({
               className="w-full bg-yellow py-2.5 text-sm font-black"
               onClick={() => {
                 setPendingNew(0);
-                window.location.reload();
+                void loadLive();
               }}
             >
               +{pendingNew} 張新照片 ↑
@@ -374,11 +380,15 @@ export function AdminConsole({
                 </div>
                 <div className="flex-1">
                   <div className="text-[11px] font-black tracking-wider text-muted">
-                    {item.team?.name ?? "未知"}
-                    {item.student_name ? `・${item.student_name}` : ""}
-                    ・{formatTaipeiTime(item.created_at)}
+                    {teamLabel(item.team)}
                   </div>
+                  {item.student_name ? (
+                    <div className="text-xs font-black">{item.student_name}</div>
+                  ) : null}
                   <div className="mt-0.5 text-sm font-black leading-snug">{item.caption}</div>
+                  <div className="mt-0.5 text-xs font-medium text-muted">
+                    {formatTaipeiTime(item.created_at)}
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <button

@@ -6,43 +6,34 @@ import { Button } from "@/components/ui";
 import type { EventRow } from "@/lib/types";
 
 export function SettingsActions({ event }: { event: EventRow }) {
-  const [galleryOn, setGalleryOn] = useState(event.gallery_public);
   const [showOn, setShowOn] = useState(event.show_public);
-  const [busy, setBusy] = useState<"gallery" | "show" | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function toggle(flag: "gallery_public" | "show_public", value: boolean) {
-    setBusy(flag === "gallery_public" ? "gallery" : "show");
+  async function toggleShow(value: boolean) {
+    setBusy(true);
     setError("");
-    const result = await setEventFlag(event.slug, flag, value);
-    setBusy(null);
+    const result = await setEventFlag(event.slug, "show_public", value);
+    setBusy(false);
     if (!result.ok) {
       setError(result.error);
       return;
     }
-    if (flag === "gallery_public") setGalleryOn(value);
-    else setShowOn(value);
+    setShowOn(value);
   }
 
   return (
     <div className="mt-10 space-y-8">
       <section className="space-y-3 border-t-2 border-ink pt-6">
-        <h2 className="text-xl font-black">學生看得到什麼</h2>
+        <h2 className="text-xl font-black">展覽</h2>
         <p className="text-sm font-medium text-muted">
-          成果牆給現場看大家拍了什麼。展覽是最後投影用的。
+          成果牆一直開著。展覽是最後投影用的，要開再開。
         </p>
         {error ? <p className="bg-danger px-3 py-2 text-sm font-black text-white">{error}</p> : null}
         <Button
-          variant={galleryOn ? "yellow" : "ghost"}
-          disabled={busy === "gallery"}
-          onClick={() => void toggle("gallery_public", !galleryOn)}
-        >
-          {galleryOn ? "成果牆：開放中" : "成果牆：關閉中"}
-        </Button>
-        <Button
           variant={showOn ? "yellow" : "ghost"}
-          disabled={busy === "show"}
-          onClick={() => void toggle("show_public", !showOn)}
+          disabled={busy}
+          onClick={() => void toggleShow(!showOn)}
         >
           {showOn ? "展覽：開放中" : "展覽：關閉中"}
         </Button>

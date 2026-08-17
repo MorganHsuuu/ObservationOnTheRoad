@@ -22,6 +22,7 @@ type MenuLink = {
 type ChromeTools = {
   onRefresh?: () => void;
   busy?: boolean;
+  updatedAt?: string;
 };
 
 const ToolsCtx = createContext<{
@@ -32,10 +33,11 @@ export function useChromeTools(tools: ChromeTools) {
   const { setTools } = useContext(ToolsCtx);
   const onRefresh = tools.onRefresh;
   const busy = tools.busy;
+  const updatedAt = tools.updatedAt;
   useEffect(() => {
-    setTools({ onRefresh, busy });
+    setTools({ onRefresh, busy, updatedAt });
     return () => setTools({});
-  }, [busy, onRefresh, setTools]);
+  }, [busy, onRefresh, setTools, updatedAt]);
 }
 
 export function SiteChrome({ children }: { children: ReactNode }) {
@@ -88,15 +90,22 @@ export function SiteChrome({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 items-center justify-between">
             <p className="min-w-0 truncate px-3 text-sm font-black">{label}</p>
             {tools.onRefresh ? (
-              <button
-                type="button"
-                onClick={tools.onRefresh}
-                disabled={tools.busy}
-                aria-label="重新整理"
-                className="flex h-11 w-11 shrink-0 items-center justify-center border-l-2 border-ink text-lg font-black active:bg-card disabled:text-muted"
-              >
-                {tools.busy ? "…" : "↻"}
-              </button>
+              <div className="flex h-11 shrink-0 items-center border-l-2 border-ink">
+                {tools.updatedAt ? (
+                  <span className="px-2.5 text-[11px] font-black tabular-nums text-yellow-deep">
+                    {tools.updatedAt}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={tools.onRefresh}
+                  disabled={tools.busy}
+                  aria-label="重新整理"
+                  className="flex h-11 w-11 items-center justify-center border-l-2 border-ink text-lg font-black active:bg-card disabled:text-muted"
+                >
+                  {tools.busy ? "…" : "↻"}
+                </button>
+              </div>
             ) : null}
           </div>
         </header>
@@ -197,7 +206,7 @@ function studentGroups(slug: string): { title: string; links: MenuLink[] }[] {
       links: [
         { href: `/e/${slug}`, label: "任務板", exact: true },
         { href: `/e/${slug}/gallery`, label: "成果牆" },
-        { href: `/e/${slug}/join`, label: "換組別" },
+        { href: `/e/${slug}/join`, label: "登出" },
       ],
     },
   ];
@@ -210,7 +219,7 @@ function teacherGroups(slug: string | null): { title: string; links: MenuLink[] 
       { href: `/admin/e/${slug}`, label: "控制台", exact: true },
       { href: `/admin/e/${slug}/tasks`, label: "題庫" },
       { href: `/admin/e/${slug}/teams`, label: "組別" },
-      { href: `/admin/e/${slug}/curate`, label: "策展" },
+      { href: `/admin/e/${slug}/curate`, label: "作品牆" },
       { href: `/e/${slug}/gallery`, label: "成果牆" },
       { href: `/show/${slug}`, label: "展覽" },
       { href: `/admin/e/${slug}/settings`, label: "設定" },
@@ -255,7 +264,7 @@ function hereLabel(pathname: string, slug: string | null) {
   if (slug && pathname === `/admin/e/${slug}`) return "控制台";
   if (slug && pathname === `/admin/e/${slug}/tasks`) return "題庫";
   if (slug && pathname === `/admin/e/${slug}/teams`) return "組別";
-  if (slug && pathname === `/admin/e/${slug}/curate`) return "策展";
+  if (slug && pathname === `/admin/e/${slug}/curate`) return "作品牆";
   if (slug && pathname === `/admin/e/${slug}/settings`) return "設定";
   return "路上觀察";
 }

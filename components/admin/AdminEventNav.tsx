@@ -9,7 +9,7 @@ export function AdminEventNav({ slug }: { slug: string }) {
     ["控制台", `/admin/e/${slug}`],
     ["題庫", `/admin/e/${slug}/tasks`],
     ["組別", `/admin/e/${slug}/teams`],
-    ["策展", `/admin/e/${slug}/curate`],
+    ["作品牆", `/admin/e/${slug}/curate`],
     ["設定", `/admin/e/${slug}/settings`],
   ] as const;
 

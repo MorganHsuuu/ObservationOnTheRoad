@@ -12,6 +12,7 @@ import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
 import { readStoredTeam, clearStoredTeam } from "@/lib/team-storage";
 import { currentTask, liveTaskCode, shortTaskTitle, sortTasksByOrder } from "@/lib/task-utils";
+import { nowTaipeiLabel, taskCode } from "@/lib/time";
 import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function EventHome({
@@ -28,6 +29,7 @@ export function EventHome({
   const [tasks, setTasks] = useState<TaskRow[]>(initialTasks);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [busy, setBusy] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState("");
   const [banner, setBanner] = useState<TaskRow | null>(null);
   const [openStory, setOpenStory] = useState(false);
   const [openBrief, setOpenBrief] = useState(false);
@@ -45,6 +47,7 @@ export function EventHome({
       setEventState(result.data.event);
       setTasks(result.data.tasks);
       setSubmissions(result.data.submissions);
+      setUpdatedAt(nowTaipeiLabel());
     },
     [event.slug, router],
   );
@@ -118,10 +121,14 @@ export function EventHome({
   const refresh = useCallback(() => {
     if (team) void load(team);
   }, [load, team]);
-  useChromeTools({ onRefresh: team ? refresh : undefined, busy });
+  useChromeTools({ onRefresh: team ? refresh : undefined, busy, updatedAt });
 
   const latest = useMemo(() => currentTask(tasks), [tasks]);
-  const ordered = useMemo(() => sortTasksByOrder(tasks), [tasks]);
+  const allTasks = useMemo(() => sortTasksByOrder(tasks), [tasks]);
+  const ordered = useMemo(
+    () => allTasks.filter((task) => task.status !== "draft"),
+    [allTasks],
+  );
   const doneIds = useMemo(() => {
     const mine = submissions.filter(
       (item) => !team?.studentId || !item.student_id || item.student_id === team.studentId,
@@ -149,6 +156,15 @@ export function EventHome({
       ) : null}
 
       <div className="mx-auto max-w-[540px] space-y-4 px-4 pt-4">
+        {allTasks.length > 0 ? (
+          <TaskTrack
+            slug={event.slug}
+            tasks={allTasks}
+            doneIds={doneIds}
+            currentId={latest?.id}
+          />
+        ) : null}
+
         {eventState.story_md ? (
           <Fold title="故事設定" open={openStory} onToggle={() => setOpenStory((value) => !value)}>
             <Md source={eventState.story_md} />
@@ -188,7 +204,7 @@ export function EventHome({
             <Card className="px-4 py-6">
               <p className="font-black">
                 {ordered.length > 0
-                  ? "現在沒有進行中的任務。下面清單還可以補交或查看已截止的題。"
+                  ? "現在沒有進行中的任務。點上面的圈圈可以查看已開放的題，虛線的還沒公布。"
                   : "任務還沒開始，先看看今天的故事設定吧"}
               </p>
             </Card>
@@ -246,16 +262,89 @@ export function EventHome({
           </Fold>
         ) : null}
 
-        {eventState.gallery_public ? (
-          <Link
-            href={`/e/${event.slug}/gallery`}
-            className="flex min-h-14 items-center justify-center border-2 border-ink bg-card text-lg font-black"
-          >
-            看看大家拍了什麼
-          </Link>
-        ) : null}
+        <Link
+          href={`/e/${event.slug}/gallery`}
+          className="flex min-h-14 items-center justify-center border-2 border-ink bg-card text-lg font-black"
+        >
+          看看大家拍了什麼
+        </Link>
       </div>
     </div>
+  );
+}
+
+function TaskTrack({
+  slug,
+  tasks,
+  doneIds,
+  currentId,
+}: {
+  slug: string;
+  tasks: TaskRow[];
+  doneIds: Set<string>;
+  currentId?: string;
+}) {
+  const [hint, setHint] = useState("");
+  const doneCount = tasks.filter((task) => doneIds.has(task.id)).length;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between border-b-2 border-ink px-3.5 py-2.5">
+        <h2 className="text-[13px] font-black tracking-[0.2em] text-muted">任務板</h2>
+        <span className="text-[13px] font-black">
+          {doneCount}/{tasks.length} 已完成
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2.5 p-3">
+        {tasks.map((task) => {
+          const done = doneIds.has(task.id);
+          const current = task.id === currentId;
+          const locked = task.status === "draft";
+          const code = taskCode(task.order_index);
+          const circle = (
+            <>
+              <i
+                className={`mx-auto mb-1 block h-[30px] w-[30px] rounded-full border-2 border-ink ${
+                  locked ? "border-dashed" : ""
+                } ${done ? "bg-ink" : current ? "bg-yellow" : ""}`}
+              />
+              <span className={`text-[11px] font-black ${done || current ? "text-ink" : "text-muted"}`}>
+                {code}
+              </span>
+            </>
+          );
+
+          if (locked) {
+            return (
+              <button
+                key={task.id}
+                type="button"
+                className="w-[42px] text-center"
+                aria-label={`任務 ${code} 尚未公布`}
+                onClick={() => setHint(`任務 ${code} 尚未公布`)}
+              >
+                {circle}
+              </button>
+            );
+          }
+
+          return (
+            <Link
+              key={task.id}
+              href={`/e/${slug}/task/${task.id}`}
+              className="w-[42px] text-center"
+              aria-label={`任務 ${code}${done ? "，已完成" : current ? "，進行中" : ""}`}
+              onClick={() => setHint("")}
+            >
+              {circle}
+            </Link>
+          );
+        })}
+      </div>
+      {hint ? (
+        <p className="border-t-2 border-ink px-3.5 py-2 text-sm font-black">{hint}</p>
+      ) : null}
+    </Card>
   );
 }
 

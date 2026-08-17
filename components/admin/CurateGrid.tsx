@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { setSubmissionFlags } from "@/app/actions/admin";
 import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
+import { teamLabel } from "@/lib/team-code";
 import type { SubmissionWithMeta, TaskRow } from "@/lib/types";
 import { sharpImage } from "@/lib/media";
 
@@ -68,7 +69,7 @@ export function CurateGrid({
             <option value="all">全部組別</option>
             {teams.map((team) => (
               <option key={team.id} value={team.id}>
-                {team.name}
+                {teamLabel(team)}
               </option>
             ))}
           </select>
@@ -92,14 +93,14 @@ export function CurateGrid({
                 <p className="text-[11px] font-black tracking-[0.08em] text-yellow">
                   任務 {liveTaskCode(item.task.id, rankTasks)}・{shortTaskTitle(item.task.title)}
                 </p>
-                <p className="text-sm font-black">{item.team?.name ?? "未知組別"}</p>
+                <p className="text-sm font-black">{teamLabel(item.team)}</p>
+                {item.student_name ? (
+                  <p className="text-xs font-black">{item.student_name}</p>
+                ) : null}
               </div>
             </div>
             <div className="p-3">
               <p className="font-black">{item.caption}</p>
-              {item.student_name ? (
-                <p className="mt-1 text-xs font-black text-muted">{item.student_name}</p>
-              ) : null}
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"

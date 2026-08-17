@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { upsertTask } from "@/app/actions/admin";
 import { Button } from "@/components/ui";
+import { useNavPending } from "@/components/NavigationProvider";
 import type { TaskRow } from "@/lib/types";
 
 export type TaskDraft = {
@@ -19,12 +20,15 @@ export function TaskEditor({
   initial,
   onCancel,
   onSaved,
+  stayPending = false,
 }: {
   slug: string;
   initial: Partial<TaskRow>;
   onCancel: () => void;
   onSaved: (draft: TaskDraft) => void;
+  stayPending?: boolean;
 }) {
+  const { start, stop } = useNavPending();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -45,13 +49,19 @@ export function TaskEditor({
     }
     setBusy(true);
     setError("");
+    start(initial.id ? "儲存中" : "新增中");
     const result = await upsertTask(slug, draft);
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
+      stop();
       setError(result.error);
       return;
     }
     onSaved(draft);
+    if (!stayPending) {
+      setBusy(false);
+      stop();
+    }
   }
 
   return (
@@ -63,7 +73,8 @@ export function TaskEditor({
           defaultValue={initial.title ?? ""}
           placeholder="例如：找到一隻兔子"
           required
-          className="h-14 w-full border-2 border-ink bg-card px-3 font-black"
+          disabled={busy}
+          className="h-14 w-full border-2 border-ink bg-card px-3 font-black disabled:opacity-50"
         />
       </label>
       <label className="block">
@@ -74,7 +85,8 @@ export function TaskEditor({
           placeholder="學生會看到的任務說明"
           required
           rows={5}
-          className="w-full border-2 border-ink bg-card p-3 font-medium"
+          disabled={busy}
+          className="w-full border-2 border-ink bg-card p-3 font-medium disabled:opacity-50"
         />
       </label>
       <label className="block">
@@ -83,7 +95,8 @@ export function TaskEditor({
           name="hint"
           defaultValue={initial.hint ?? ""}
           placeholder="不想一次講破可以寫這裡"
-          className="h-12 w-full border-2 border-ink bg-card px-3"
+          disabled={busy}
+          className="h-12 w-full border-2 border-ink bg-card px-3 disabled:opacity-50"
         />
       </label>
       <label className="flex min-h-11 items-center gap-2 font-black">
@@ -107,9 +120,9 @@ export function TaskEditor({
       </label>
       {error ? <p className="bg-danger px-3 py-3 text-sm font-black text-white">{error}</p> : null}
       <Button type="submit" disabled={busy}>
-        {busy ? "儲存中…" : initial.id ? "儲存修改" : "新增任務"}
+        {busy ? (initial.id ? "儲存中…" : "新增中…") : initial.id ? "儲存修改" : "新增任務"}
       </Button>
-      <Button type="button" variant="ghost" className="min-h-11 text-[15px]" onClick={onCancel}>
+      <Button type="button" variant="ghost" className="min-h-11 text-[15px]" disabled={busy} onClick={onCancel}>
         取消
       </Button>
     </form>

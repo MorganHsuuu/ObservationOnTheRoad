@@ -12,6 +12,18 @@ export function isTeamCode(code: string) {
   return /^\d{2}$/.test(code);
 }
 
+export function teamNameFromCode(code: string) {
+  return `第 ${Number(code)} 組`;
+}
+
+export function teamLabel(
+  team?: { name?: string | null; code?: string | null } | null,
+) {
+  const code = finalizeTeamCode(team?.code || team?.name || "");
+  if (isTeamCode(code)) return teamNameFromCode(code);
+  return team?.name?.trim() || "未知組別";
+}
+
 export function sanitizeStudentId(raw: string) {
   return raw.trim().slice(0, 32);
 }

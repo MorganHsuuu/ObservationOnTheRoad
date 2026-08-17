@@ -33,10 +33,8 @@ export function UploadForm({
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const [boardEvent, setBoardEvent] = useState<EventRow | null>(null);
   const [boardTask, setBoardTask] = useState<TaskRow | null>(null);
 
-  const liveEvent = boardEvent ?? event;
   const liveTask = boardTask?.id === task.id ? boardTask : task;
   const closed = liveTask.status === "closed";
   const canUpload = uploadAllowed(liveTask);
@@ -56,7 +54,6 @@ export function UploadForm({
     }
     void getStudentBoard(event.slug, team.teamId).then((result) => {
       if (!result.ok) return;
-      setBoardEvent(result.data.event);
       const fresh = result.data.tasks.find((item) => item.id === task.id);
       if (fresh) setBoardTask(fresh);
       const rows = result.data.submissions.filter((item) => item.task_id === task.id);
@@ -214,7 +211,7 @@ export function UploadForm({
                 改照片或說明
               </Button>
             ) : null}
-            {!compact && liveEvent.gallery_public ? (
+            {!compact ? (
               <Link
                 href={`/e/${event.slug}/gallery`}
                 className="mt-2 flex min-h-12 items-center justify-center border-2 border-ink bg-ink text-[15px] font-black text-paper"

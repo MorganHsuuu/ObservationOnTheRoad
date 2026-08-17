@@ -33,7 +33,7 @@ export default async function ShowPage(props: PageProps<"/show/[slug]">) {
   if (!event.show_public) {
     return (
       <div className="mx-auto max-w-[640px] px-4 py-20">
-        <EmptyState title="展覽準備中" body="策展還沒完成，晚點再來。" />
+        <EmptyState title="展覽準備中" body="作品牆還沒整理完，晚點再來。" />
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/ui";
 import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
+import { teamLabel } from "@/lib/team-code";
 import { formatTaipeiTime } from "@/lib/time";
 import { sharpImage } from "@/lib/media";
 import type { SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
@@ -99,7 +100,7 @@ export function GalleryView({
             <option value="all">全部組別</option>
             {teams.map((team) => (
               <option key={team.id} value={team.code || teamNumber(team.name)}>
-                {team.name}
+                {teamLabel(team)}
               </option>
             ))}
           </FilterSelect>
@@ -188,15 +189,14 @@ function PhotoFrame({
 }) {
   const code = liveTaskCode(item.task.id, tasks);
   const title = shortTaskTitle(item.task.title);
-  const team = item.team?.name ?? "未知組別";
-  const who = item.student_name ? `${team}・${item.student_name}` : team;
+  const team = teamLabel(item.team);
 
   return (
     <div className="relative border-b-2 border-ink bg-[#DEDCD4]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={full ? item.image_urls[0] || sharpImage(item) : sharpImage(item)}
-        alt={`${title}／${who}`}
+        alt={`${title}／${team}${item.student_name ? `／${item.student_name}` : ""}`}
         loading={full ? "eager" : "lazy"}
         decoding="async"
         className={full ? "max-h-[56vh] w-full object-contain" : "block w-full"}
@@ -205,7 +205,8 @@ function PhotoFrame({
         <p className="text-[11px] font-black tracking-[0.12em] text-yellow">
           任務 {code}・{title}
         </p>
-        <p className="text-sm font-black">{who}</p>
+        <p className="text-sm font-black">{team}</p>
+        {item.student_name ? <p className="text-xs font-black">{item.student_name}</p> : null}
       </div>
     </div>
   );

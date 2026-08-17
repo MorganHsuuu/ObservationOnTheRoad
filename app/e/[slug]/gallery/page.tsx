@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { GalleryView } from "@/components/gallery/GalleryView";
-import { EmptyState } from "@/components/ui";
 import { isSupabaseConfigured } from "@/lib/env";
 import { getAdminTeams, getPublicEvent, getPublicSubmissions, getVisibleTasks } from "@/lib/queries";
 import { formatTaipeiDate } from "@/lib/time";
@@ -12,17 +10,6 @@ export default async function GalleryPage(props: PageProps<"/e/[slug]/gallery">)
   const { slug } = await props.params;
   const event = await getPublicEvent(slug);
   if (!event) notFound();
-
-  if (!event.gallery_public) {
-    return (
-      <div className="mx-auto max-w-[540px] px-4 py-16">
-        <EmptyState title="成果牆還沒開放，晚點見" body="老師一開，這裡就會出現大家的觀察。" />
-        <Link href={`/e/${slug}`} className="mt-6 block text-center font-black">
-          回任務板
-        </Link>
-      </div>
-    );
-  }
 
   const [tasks, submissions, teams] = await Promise.all([
     getVisibleTasks(event.id),

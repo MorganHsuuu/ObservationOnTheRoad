@@ -82,7 +82,6 @@ export async function getStudentBoard(slug: string, teamId: string) {
       .from("tasks")
       .select("*")
       .eq("event_id", event.id)
-      .in("status", ["published", "closed"])
       .order("order_index", { ascending: true }),
     supabase.from("submissions").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
   ]);
@@ -93,7 +92,11 @@ export async function getStudentBoard(slug: string, teamId: string) {
     data: {
       event,
       team,
-      tasks: (tasks ?? []) as TaskRow[],
+      tasks: ((tasks ?? []) as TaskRow[]).map((task) =>
+        task.status === "draft"
+          ? { ...task, title: "", prompt_md: "", hint: null }
+          : task,
+      ),
       submissions: (submissions ?? []) as SubmissionRow[],
     },
   };

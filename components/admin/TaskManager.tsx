@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   deleteTask,
@@ -10,8 +10,9 @@ import {
 } from "@/app/actions/admin";
 import { TaskEditor } from "@/components/admin/TaskEditor";
 import { Card } from "@/components/ui";
+import { useNavPending } from "@/components/NavigationProvider";
 import { adminTaskCodeLabel, shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
-import type { EventRow, TaskRow } from "@/lib/types";
+import type { ActionResult, EventRow, TaskRow } from "@/lib/types";
 
 export function TaskManager({
   slug,
@@ -25,15 +26,42 @@ export function TaskManager({
   initialEditId?: string;
 }) {
   const router = useRouter();
+  const { start, stop } = useNavPending();
   const [editing, setEditing] = useState<Partial<TaskRow> | null>(() => {
     if (!initialEditId) return null;
     return tasks.find((task) => task.id === initialEditId) ?? null;
   });
   const [error, setError] = useState("");
   const [source, setSource] = useState(otherEvents[0]?.slug ?? "");
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
 
-  function afterChange() {
+  useEffect(() => {
+    if (!busyRef.current) return;
+    stop();
+    setBusy(false);
+  }, [stop, tasks]);
+
+  async function mutate(label: string, action: () => Promise<ActionResult<unknown>>) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    start(label);
+    const result = await action();
+    if (!result.ok) {
+      setBusy(false);
+      stop();
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
+  function afterSave() {
     setEditing(null);
+    setBusy(true);
+    start("更新畫面");
     router.refresh();
   }
 
@@ -42,7 +70,8 @@ export function TaskManager({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          className="min-h-14 border-2 border-ink bg-ink px-4 font-black text-paper"
+          disabled={busy}
+          className="min-h-14 border-2 border-ink bg-ink px-4 font-black text-paper disabled:opacity-50"
           onClick={() =>
             setEditing({
               title: "",
@@ -58,16 +87,16 @@ export function TaskManager({
         {otherEvents.length > 0 ? (
           <form
             className="flex flex-wrap gap-2"
-            action={async () => {
-              const result = await importTasksFromEvent(slug, source);
-              if (!result.ok) setError(result.error);
-              else router.refresh();
+            onSubmit={(event) => {
+              event.preventDefault();
+              void mutate("匯入中", () => importTasksFromEvent(slug, source));
             }}
           >
             <select
               value={source}
               onChange={(event) => setSource(event.target.value)}
-              className="min-h-14 border-2 border-ink bg-card px-3 font-black"
+              disabled={busy}
+              className="min-h-14 border-2 border-ink bg-card px-3 font-black disabled:opacity-50"
             >
               {otherEvents.map((item) => (
                 <option key={item.id} value={item.slug}>
@@ -75,7 +104,11 @@ export function TaskManager({
                 </option>
               ))}
             </select>
-            <button type="submit" className="min-h-14 border-2 border-ink bg-card px-4 font-black">
+            <button
+              type="submit"
+              disabled={busy}
+              className="min-h-14 border-2 border-ink bg-card px-4 font-black disabled:opacity-50"
+            >
               匯入題庫
             </button>
           </form>
@@ -90,8 +123,9 @@ export function TaskManager({
           <TaskEditor
             slug={slug}
             initial={editing}
+            stayPending
             onCancel={() => setEditing(null)}
-            onSaved={afterChange}
+            onSaved={afterSave}
           />
         </Card>
       ) : null}
@@ -107,8 +141,9 @@ export function TaskManager({
                 <TaskEditor
                   slug={slug}
                   initial={task}
+                  stayPending
                   onCancel={() => setEditing(null)}
-                  onSaved={afterChange}
+                  onSaved={afterSave}
                 />
               </div>
             ) : (
@@ -116,17 +151,17 @@ export function TaskManager({
                 <div className="flex flex-col gap-1">
                   <button
                     type="button"
-                    disabled={index === 0}
+                    disabled={busy || index === 0}
                     className="min-h-11 px-2 font-black disabled:text-muted"
-                    onClick={() => void moveTask(slug, task.id, "up").then(() => router.refresh())}
+                    onClick={() => void mutate("排序中", () => moveTask(slug, task.id, "up"))}
                   >
                     ↑
                   </button>
                   <button
                     type="button"
-                    disabled={index === tasks.length - 1}
+                    disabled={busy || index === tasks.length - 1}
                     className="min-h-11 px-2 font-black disabled:text-muted"
-                    onClick={() => void moveTask(slug, task.id, "down").then(() => router.refresh())}
+                    onClick={() => void mutate("排序中", () => moveTask(slug, task.id, "down"))}
                   >
                     ↓
                   </button>
@@ -149,23 +184,26 @@ export function TaskManager({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="min-h-11 border-2 border-ink bg-ink px-3 text-sm font-black text-paper"
+                      disabled={busy}
+                      className="min-h-11 border-2 border-ink bg-ink px-3 text-sm font-black text-paper disabled:opacity-50"
                       onClick={() => setEditing(task)}
                     >
                       編輯題目
                     </button>
                     <button
                       type="button"
-                      className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black"
-                      onClick={() => void duplicateTask(slug, task.id).then(() => router.refresh())}
+                      disabled={busy}
+                      className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black disabled:opacity-50"
+                      onClick={() => void mutate("複製中", () => duplicateTask(slug, task.id))}
                     >
                       複製
                     </button>
                     {task.status === "draft" ? (
                       <button
                         type="button"
-                        className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black"
-                        onClick={() => void deleteTask(slug, task.id).then(() => router.refresh())}
+                        disabled={busy}
+                        className="min-h-11 border-2 border-ink bg-card px-3 text-sm font-black disabled:opacity-50"
+                        onClick={() => void mutate("刪除中", () => deleteTask(slug, task.id))}
                       >
                         刪除
                       </button>

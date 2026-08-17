@@ -6,6 +6,7 @@ import { closeBroadcast, getAdminRoom, publishBroadcast } from "@/app/actions/ad
 import { Button, Modal } from "@/components/ui";
 import { answerLabel, broadcastKindLabel } from "@/lib/broadcast";
 import { createBrowserClient } from "@/lib/supabase/browser";
+import { teamLabel } from "@/lib/team-code";
 import type {
   BroadcastKind,
   BroadcastResponseRow,
@@ -79,9 +80,9 @@ export function BroadcastHorn({
     };
   }, [eventId, load]);
 
-  const teamName = useMemo(() => {
-    const map = new Map(teams.map((team) => [team.id, team.name]));
-    return (teamId: string | null) => (teamId ? map.get(teamId) ?? "—" : "—");
+  const teamOf = useMemo(() => {
+    const map = new Map(teams.map((team) => [team.id, team]));
+    return (teamId: string | null) => teamLabel(teamId ? map.get(teamId) : null);
   }, [teams]);
 
   const answeredIds = useMemo(
@@ -187,11 +188,13 @@ export function BroadcastHorn({
                 ) : (
                   responses.map((item) => (
                     <p key={item.id} className="text-sm font-black">
+                      <span className="mr-1 font-medium text-muted">{teamOf(item.team_id)}</span>
                       {item.student_name}
-                      <span className="ml-1 font-medium text-muted">
-                        {teamName(item.team_id)}
-                        {broadcast.kind === "ack" ? "" : `・${answerLabel(broadcast.kind, item.answer)}`}
-                      </span>
+                      {broadcast.kind === "ack" ? null : (
+                        <span className="ml-1 font-medium text-muted">
+                          ・{answerLabel(broadcast.kind, item.answer)}
+                        </span>
+                      )}
                     </p>
                   ))
                 )}
@@ -205,8 +208,8 @@ export function BroadcastHorn({
                 ) : (
                   pending.map((item) => (
                     <p key={item.id} className="text-sm font-black">
+                      <span className="mr-1 font-medium text-muted">{teamOf(item.team_id)}</span>
                       {item.student_name}
-                      <span className="ml-1 font-medium text-muted">{teamName(item.team_id)}</span>
                     </p>
                   ))
                 )}

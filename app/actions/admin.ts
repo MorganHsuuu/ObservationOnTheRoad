@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { finalizeTeamCode, isTeamCode } from "@/lib/team-code";
+import { finalizeTeamCode, isTeamCode, teamNameFromCode } from "@/lib/team-code";
+import {
+  getAdminEvent,
+  getAdminSubmissions,
+  getAdminTasks,
+  getAdminTeams,
+} from "@/lib/queries";
 import type {
   ActionResult,
   BroadcastKind,
@@ -88,7 +94,7 @@ export async function setEventStatus(
 
 export async function setEventFlag(
   slug: string,
-  flag: "gallery_public" | "show_public",
+  flag: "show_public",
   value: boolean,
 ): Promise<ActionResult> {
   await requireAdmin();
@@ -124,6 +130,7 @@ export async function seedSongshanEvent(): Promise<ActionResult<{ slug: string }
       briefing_md:
         "集合：一樓報到大廳大鐘下。\n請待在公共區域，不要進入管制區。\n每題拍一張、寫一句話。上傳失敗就按再試一次。",
       status: "setup",
+      gallery_public: true,
     })
     .select("id")
     .single();
@@ -381,13 +388,14 @@ export async function closeAllTasks(slug: string): Promise<ActionResult> {
 
 export async function upsertTeam(
   slug: string,
-  input: { id?: string; name: string; code: string; members: string | null },
+  input: { id?: string; code: string; members: string | null },
 ): Promise<ActionResult> {
   await requireAdmin();
   const code = finalizeTeamCode(input.code);
-  if (!isTeamCode(code) || !input.name.trim()) {
-    return { ok: false, error: "組名必填，組別請填 01、02、03…" };
+  if (!isTeamCode(code)) {
+    return { ok: false, error: "組別請填 01、02、03…" };
   }
+  const name = teamNameFromCode(code);
   const supabase = createAdminClient();
   const { data: event } = await supabase
     .from("events")
@@ -399,13 +407,13 @@ export async function upsertTeam(
   if (input.id) {
     const { error } = await supabase
       .from("teams")
-      .update({ name: input.name.trim(), code, members: input.members })
+      .update({ name, code, members: input.members })
       .eq("id", input.id);
     if (error) return { ok: false, error: error.message };
   } else {
     const { error } = await supabase.from("teams").insert({
       event_id: event.id,
-      name: input.name.trim(),
+      name,
       code,
       members: input.members,
     });
@@ -478,6 +486,18 @@ export async function getAdminRoom(slug: string) {
       responses,
     },
   };
+}
+
+export async function getAdminLive(slug: string) {
+  await requireAdmin();
+  const event = await getAdminEvent(slug);
+  if (!event) return { ok: false as const, error: "找不到場次" };
+  const [tasks, teams, submissions] = await Promise.all([
+    getAdminTasks(event.id),
+    getAdminTeams(event.id),
+    getAdminSubmissions(event.id),
+  ]);
+  return { ok: true as const, data: { event, tasks, teams, submissions } };
 }
 
 export async function publishBroadcast(
