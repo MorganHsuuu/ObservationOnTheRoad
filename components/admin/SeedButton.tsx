@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { seedSongshanEvent } from "@/app/actions/admin";
+import { useNavPending } from "@/components/NavigationProvider";
 
 export function SeedButton() {
   const router = useRouter();
+  const { start, stop } = useNavPending();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -18,9 +20,11 @@ export function SeedButton() {
         onClick={async () => {
           setBusy(true);
           setError("");
+          start("建立中");
           const result = await seedSongshanEvent();
-          setBusy(false);
           if (!result.ok) {
+            setBusy(false);
+            stop();
             setError(result.error);
             return;
           }

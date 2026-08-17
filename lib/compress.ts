@@ -10,18 +10,18 @@ export async function compressForUpload(
   onProgress?: (percent: number) => void,
 ): Promise<CompressedPair> {
   const full = await imageCompression(file, {
-    maxWidthOrHeight: 1600,
-    maxSizeMB: 0.5,
-    initialQuality: 0.75,
+    maxWidthOrHeight: 1920,
+    maxSizeMB: 0.9,
+    initialQuality: 0.84,
     fileType: "image/jpeg",
     useWebWorker: true,
     onProgress: (p) => onProgress?.(Math.round(p * 0.7)),
   });
 
   const thumb = await imageCompression(file, {
-    maxWidthOrHeight: 400,
-    maxSizeMB: 0.06,
-    initialQuality: 0.7,
+    maxWidthOrHeight: 960,
+    maxSizeMB: 0.22,
+    initialQuality: 0.86,
     fileType: "image/webp",
     useWebWorker: true,
     onProgress: (p) => onProgress?.(70 + Math.round(p * 0.2)),

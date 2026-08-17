@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Anton, Noto_Sans_TC } from "next/font/google";
+import { NavigationProvider } from "@/components/NavigationProvider";
 import "./globals.css";
 
 const noto = Noto_Sans_TC({
@@ -22,7 +23,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="zh-Hant" className={`${noto.variable} ${anton.variable} h-full`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <NavigationProvider>{children}</NavigationProvider>
+      </body>
     </html>
   );
 }

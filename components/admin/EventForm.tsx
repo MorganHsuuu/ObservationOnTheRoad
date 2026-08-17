@@ -4,20 +4,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createEvent, updateEvent } from "@/app/actions/admin";
 import { Button } from "@/components/ui";
+import { useNavPending } from "@/components/NavigationProvider";
 import type { EventRow } from "@/lib/types";
 
 export function EventForm({ event }: { event?: EventRow }) {
   const router = useRouter();
+  const { start, stop } = useNavPending();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(formData: FormData) {
     setBusy(true);
     setError("");
+    start("儲存中");
     if (event) {
       const result = await updateEvent(event.slug, formData);
-      setBusy(false);
       if (!result.ok) {
+        setBusy(false);
+        stop();
         setError(result.error);
         return;
       }
@@ -25,8 +29,9 @@ export function EventForm({ event }: { event?: EventRow }) {
       return;
     }
     const result = await createEvent(formData);
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
+      stop();
       setError(result.error);
       return;
     }

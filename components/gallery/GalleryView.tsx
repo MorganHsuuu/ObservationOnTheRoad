@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/ui";
 import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
 import { formatTaipeiTime } from "@/lib/time";
+import { sharpImage } from "@/lib/media";
 import type { SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
 
 export function GalleryView({
@@ -20,19 +21,22 @@ export function GalleryView({
   featuredFirst?: boolean;
   deepLinkId?: string;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const taskFilter = searchParams.get("task") ?? "all";
-  const teamFilter = searchParams.get("team") ?? "all";
+  const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? "all");
+  const [teamFilter, setTeamFilter] = useState(searchParams.get("team") ?? "all");
   const [openId, setOpenId] = useState(deepLinkId ?? searchParams.get("s"));
 
   function setFilter(key: "task" | "team", value: string) {
-    const next = new URLSearchParams(searchParams.toString());
-    if (value === "all") next.delete(key);
-    else next.set(key, value);
+    const nextTask = key === "task" ? value : taskFilter;
+    const nextTeam = key === "team" ? value : teamFilter;
+    setTaskFilter(nextTask);
+    setTeamFilter(nextTeam);
+    const next = new URLSearchParams();
+    if (nextTask !== "all") next.set("task", nextTask);
+    if (nextTeam !== "all") next.set("team", nextTeam);
     const query = next.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
   }
 
   const list = useMemo(() => {
@@ -117,9 +121,10 @@ export function GalleryView({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={item.thumb_urls[0] ?? item.image_urls[0]}
+                src={sharpImage(item)}
                 alt=""
                 loading="lazy"
+                decoding="async"
                 className="block w-full border-b-2 border-ink"
               />
               <div className="flex items-center justify-between gap-2 bg-ink px-3 py-1.5 text-paper">

@@ -57,6 +57,25 @@
   box-shadow: 4px 4px 0 var(--ink);
 }
 
+@keyframes float-card {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.float-card {
+  animation: float-card 0.9s ease-in-out infinite;
+}
+
+button:not(:disabled):active,
+a:active {
+  transform: translate(2px, 2px);
+}
+
 .masonry {
   columns: 1;
   column-gap: 20px;

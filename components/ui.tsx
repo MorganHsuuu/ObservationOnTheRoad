@@ -18,7 +18,7 @@ export function Button({
 
   return (
     <button
-      className={`w-full min-h-14 border-2 border-ink font-black text-lg disabled:cursor-not-allowed ${styles} ${className}`}
+      className={`w-full min-h-14 border-2 border-ink font-black text-lg disabled:cursor-not-allowed active:translate-x-[2px] active:translate-y-[2px] ${styles} ${className}`}
       {...props}
     />
   );

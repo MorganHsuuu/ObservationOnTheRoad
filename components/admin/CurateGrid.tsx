@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { setSubmissionFlags } from "@/app/actions/admin";
 import { liveTaskCode } from "@/lib/task-utils";
 import type { SubmissionWithMeta, TaskRow } from "@/lib/types";
+import { sharpImage } from "@/lib/media";
 
 export function CurateGrid({
   slug,
@@ -26,7 +27,7 @@ export function CurateGrid({
         <article key={item.id} className={`border-2 border-ink bg-card ${item.is_hidden ? "opacity-40" : ""}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={item.thumb_urls[0] ?? item.image_urls[0]}
+            src={sharpImage(item)}
             alt=""
             className="aspect-square w-full object-cover"
           />

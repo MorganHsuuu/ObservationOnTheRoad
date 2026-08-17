@@ -8,6 +8,7 @@ import { Button, Card } from "@/components/ui";
 import { compressForUpload } from "@/lib/compress";
 import { readStoredTeam } from "@/lib/team-storage";
 import { uploadAllowed } from "@/lib/task-utils";
+import { sharpImage } from "@/lib/media";
 import type { EventRow, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function UploadForm({
@@ -289,9 +290,9 @@ export function UploadForm({
           </h2>
           {mine.map((item) => (
             <Card key={item.id} className="overflow-hidden">
-              {item.thumb_urls[0] ? (
+              {sharpImage(item) ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.thumb_urls[0]} alt="" className="w-full" />
+                <img src={sharpImage(item)} alt="" className="w-full" />
               ) : null}
               <div className="px-3.5 py-3">
                 <p className="font-black">{item.caption || "（沒有說明）"}</p>

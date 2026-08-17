@@ -8,6 +8,8 @@ import { Md } from "@/components/Markdown";
 import { RefreshBar } from "@/components/RefreshBar";
 import { UploadForm } from "@/components/student/UploadForm";
 import { Card } from "@/components/ui";
+import { PageLoader } from "@/components/LoadingMark";
+import { useNavPending } from "@/components/NavigationProvider";
 import { createBrowserClient } from "@/lib/supabase/browser";
 import { clearStoredTeam, readStoredTeam } from "@/lib/team-storage";
 import { currentTask, liveTaskCode, shortTaskTitle, sortTasksByOrder } from "@/lib/task-utils";
@@ -16,8 +18,10 @@ import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function EventHome({ event }: { event: EventRow }) {
   const router = useRouter();
+  const { start } = useNavPending();
   const [team, setTeam] = useState<StoredTeam | null>(null);
   const [booted, setBooted] = useState(false);
+  const [ready, setReady] = useState(false);
   const [eventState, setEventState] = useState(event);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
@@ -41,6 +45,7 @@ export function EventHome({ event }: { event: EventRow }) {
       setEventState(result.data.event);
       setTasks(result.data.tasks);
       setSubmissions(result.data.submissions);
+      setReady(true);
     },
     [event.slug, router],
   );
@@ -112,8 +117,8 @@ export function EventHome({ event }: { event: EventRow }) {
     [submissions],
   );
 
-  if (!booted || !team) {
-    return <p className="p-6 font-black">載入中…</p>;
+  if (!booted || !team || !ready) {
+    return <PageLoader label="載入任務" />;
   }
 
   return (
@@ -155,6 +160,7 @@ export function EventHome({ event }: { event: EventRow }) {
               type="button"
               className="text-xs font-black text-muted underline"
               onClick={() => {
+                start("切換組別");
                 clearStoredTeam(event.slug);
                 router.replace(`/e/${event.slug}/join`);
               }}
