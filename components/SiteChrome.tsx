@@ -26,6 +26,8 @@ type ChromeTools = {
   updatedAt?: string;
 };
 
+const TEACHER_EVENT_KEY = "observe:teacher-event";
+
 const ToolsCtx = createContext<{
   setTools: (tools: ChromeTools) => void;
 }>({ setTools: () => {} });
@@ -45,6 +47,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuPath, setMenuPath] = useState<string | null>(null);
   const [person, setPerson] = useState("");
+  const [teacherEventSlug, setTeacherEventSlug] = useState<string | null>(null);
   const [tools, setTools] = useState<ChromeTools>({});
   const open = menuPath === pathname;
   const setToolsStable = useCallback((next: ChromeTools) => setTools(next), []);
@@ -58,23 +61,34 @@ export function SiteChrome({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const { slug, role, groups } = useMemo(
-    () => parseNav(pathname, Boolean(person)),
-    [pathname, person],
+  useEffect(() => {
+    const fromAdmin = pathname.match(/^\/admin\/e\/([^/]+)/)?.[1];
+    if (fromAdmin) {
+      sessionStorage.setItem(TEACHER_EVENT_KEY, fromAdmin);
+      setTeacherEventSlug(fromAdmin);
+      return;
+    }
+    setTeacherEventSlug(sessionStorage.getItem(TEACHER_EVENT_KEY));
+  }, [pathname]);
+
+  const { slug, groups } = useMemo(
+    () => parseNav(pathname, Boolean(person), teacherEventSlug),
+    [pathname, person, teacherEventSlug],
   );
   const title = hereLabel(pathname, slug);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (role !== "student" || !slug) {
+      const eventSlug = pathname.match(/^\/e\/([^/]+)/)?.[1];
+      if (!eventSlug) {
         setPerson("");
         return;
       }
-      const stored = readStoredTeam(slug);
+      const stored = readStoredTeam(eventSlug);
       setPerson(stored ? `${stored.teamCode}・${stored.studentName}` : "");
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [pathname, role, slug]);
+  }, [pathname]);
 
   const label = person || title;
 
@@ -191,7 +205,7 @@ function HamburgerIcon({ open }: { open: boolean }) {
   );
 }
 
-function parseNav(pathname: string, joined: boolean) {
+function parseNav(pathname: string, joined: boolean, teacherEventSlug: string | null) {
   const eventSlug = pathname.match(/^\/e\/([^/]+)/)?.[1];
   const showSlug = pathname.match(/^\/show\/([^/]+)/)?.[1];
   const adminSlug = pathname.match(/^\/admin\/e\/([^/]+)/)?.[1];
@@ -201,9 +215,15 @@ function parseNav(pathname: string, joined: boolean) {
     return { slug, role: "teacher" as const, groups: teacherGroups(slug) };
   }
   if (showSlug) {
+    if (teacherEventSlug === showSlug) {
+      return { slug: showSlug, role: "teacher" as const, groups: teacherGroups(showSlug) };
+    }
     return { slug: showSlug, role: "public" as const, groups: showGroups(showSlug) };
   }
   if (eventSlug) {
+    if (teacherEventSlug === eventSlug) {
+      return { slug: eventSlug, role: "teacher" as const, groups: teacherGroups(eventSlug) };
+    }
     return {
       slug: eventSlug,
       role: "student" as const,
@@ -214,24 +234,14 @@ function parseNav(pathname: string, joined: boolean) {
 }
 
 function studentGroups(slug: string, joined: boolean): { title: string; links: MenuLink[] }[] {
-  if (!joined) {
-    return [
-      {
-        title: "",
-        links: [{ href: `/e/${slug}/gallery`, label: "成果牆" }],
-      },
-    ];
-  }
-  return [
-    {
-      title: "",
-      links: [
-        { href: `/e/${slug}`, label: "任務板", exact: true },
-        { href: `/e/${slug}/gallery`, label: "成果牆" },
-        { href: `/e/${slug}/join`, label: "登出", logout: true },
-      ],
-    },
+  const links: MenuLink[] = [
+    { href: `/e/${slug}`, label: "任務板", exact: true },
+    { href: `/e/${slug}/gallery`, label: "成果牆" },
   ];
+  if (joined) {
+    links.push({ href: `/e/${slug}/join`, label: "登出", logout: true });
+  }
+  return [{ title: "", links }];
 }
 
 function teacherGroups(slug: string | null): { title: string; links: MenuLink[] }[] {

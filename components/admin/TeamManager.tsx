@@ -63,12 +63,16 @@ export function TeamManager({
     }
   }
 
-  async function onDelete(teamId: string) {
+  async function onDelete(team: TeamRow) {
     if (busy) return;
+    const label = teamLabel(team);
+    if (!window.confirm(`確定刪除${label}？這一組的學生之後就不能用代碼 ${team.code} 進來。`)) {
+      return;
+    }
     setBusy(true);
     setError("");
     start("刪除中");
-    const result = await deleteTeam(slug, teamId);
+    const result = await deleteTeam(slug, team.id);
     if (!result.ok) {
       setBusy(false);
       stop();
@@ -164,7 +168,10 @@ export function TeamManager({
                     type="button"
                     disabled={busy}
                     className="min-h-11 text-sm font-black text-danger disabled:opacity-50"
-                    onClick={() => void onDelete(team.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void onDelete(team);
+                    }}
                   >
                     刪除這一組
                   </button>
