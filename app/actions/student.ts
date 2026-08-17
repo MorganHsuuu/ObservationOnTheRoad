@@ -109,6 +109,93 @@ function storagePathFromPublicUrl(url: string) {
   return decodeURIComponent(url.slice(index + marker.length));
 }
 
+function ownedStoragePath(path: string, slug: string) {
+  return Boolean(path) && path.startsWith(`${slug}/`) && !path.includes("..") && !path.startsWith("/");
+}
+
+async function resolveLiveUpload(input: { slug: string; taskId: string; teamId: string }) {
+  const supabase = createAdminClient();
+  const { data: event } = await supabase
+    .from("events")
+    .select("*")
+    .eq("slug", input.slug)
+    .maybeSingle();
+  if (!event) return { ok: false as const, error: "找不到這個活動" };
+
+  const { data: task } = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("id", input.taskId)
+    .eq("event_id", event.id)
+    .maybeSingle();
+  if (!task) return { ok: false as const, error: "找不到這個任務" };
+  if (task.status !== "published") {
+    return { ok: false as const, error: "這個任務已經截止囉" };
+  }
+
+  const { data: team } = await supabase
+    .from("teams")
+    .select("*")
+    .eq("id", input.teamId)
+    .eq("event_id", event.id)
+    .maybeSingle();
+  if (!team) return { ok: false as const, error: "組別已不存在，請重新加入" };
+
+  return { ok: true as const, data: { supabase, event, task, team } };
+}
+
+export async function prepareSubmissionUpload(input: {
+  slug: string;
+  taskId: string;
+  teamId: string;
+  studentId: string;
+}): Promise<
+  ActionResult<{
+    fullPath: string;
+    thumbPath: string;
+    fullToken: string;
+    thumbToken: string;
+    fullSignedUrl: string;
+    thumbSignedUrl: string;
+  }>
+> {
+  const studentId = sanitizeStudentId(input.studentId);
+  const live = await resolveLiveUpload(input);
+  if (!live.ok) return live;
+  const { supabase, event, task, team } = live.data;
+  const stamp = Date.now();
+  const prefix = `${event.slug}/${task.id}/${team.code}-${studentId || "anon"}-${stamp}`;
+  const fullPath = `${prefix}.jpg`;
+  const thumbPath = `${prefix}-thumb.jpg`;
+
+  const [fullSlot, thumbSlot] = await Promise.all([
+    supabase.storage.from("submissions").createSignedUploadUrl(fullPath),
+    supabase.storage.from("submissions").createSignedUploadUrl(thumbPath),
+  ]);
+  if (
+    fullSlot.error ||
+    !fullSlot.data?.signedUrl ||
+    !fullSlot.data.token ||
+    thumbSlot.error ||
+    !thumbSlot.data?.signedUrl ||
+    !thumbSlot.data.token
+  ) {
+    return { ok: false, error: "上傳失敗，再試一次" };
+  }
+
+  return {
+    ok: true,
+    data: {
+      fullPath,
+      thumbPath,
+      fullToken: fullSlot.data.token,
+      thumbToken: thumbSlot.data.token,
+      fullSignedUrl: fullSlot.data.signedUrl,
+      thumbSignedUrl: thumbSlot.data.signedUrl,
+    },
+  };
+}
+
 export async function uploadSubmission(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const slug = String(formData.get("slug") ?? "");
   const taskId = String(formData.get("taskId") ?? "");
@@ -118,42 +205,20 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   const studentName = sanitizeStudentName(String(formData.get("studentName") ?? ""));
   const latRaw = formData.get("lat");
   const lngRaw = formData.get("lng");
-  const full = formData.get("full");
-  const thumb = formData.get("thumb");
-  const hasNewPhoto = full instanceof File && thumb instanceof File && full.size > 0;
+  const fullPath = String(formData.get("fullPath") ?? "");
+  const thumbPath = String(formData.get("thumbPath") ?? "");
+  const hasNewPhoto = ownedStoragePath(fullPath, slug) && ownedStoragePath(thumbPath, slug);
 
-  const supabase = createAdminClient();
-  const { data: event } = await supabase
-    .from("events")
-    .select("*")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!event) return { ok: false, error: "找不到這個活動" };
+  const live = await resolveLiveUpload({ slug, taskId, teamId });
+  if (!live.ok) return live;
+  const { supabase, event, task, team } = live.data;
 
-  const { data: task } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("id", taskId)
-    .eq("event_id", event.id)
-    .maybeSingle();
-  if (!task) return { ok: false, error: "找不到這個任務" };
-  if (task.status !== "published") {
-    return { ok: false, error: "這個任務已經截止囉" };
-  }
   if (event.status !== "live") {
     await supabase.from("events").update({ status: "live" }).eq("id", event.id);
   }
   if (task.requires_caption && caption.length === 0) {
     return { ok: false, error: "寫一句話再說說你為什麼拍它" };
   }
-
-  const { data: team } = await supabase
-    .from("teams")
-    .select("*")
-    .eq("id", teamId)
-    .eq("event_id", event.id)
-    .maybeSingle();
-  if (!team) return { ok: false, error: "組別已不存在，請重新加入" };
 
   let existing: { id: string; image_urls: string[]; thumb_urls: string[] } | null = null;
   if (studentId) {
@@ -179,30 +244,8 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
 
   let imageUrls = existing?.image_urls ?? [];
   let thumbUrls = existing?.thumb_urls ?? [];
-  const uploaded: string[] = [];
 
-  if (hasNewPhoto && full instanceof File && thumb instanceof File) {
-    const stamp = Date.now();
-    const fullPath = `${event.slug}/${task.id}/${team.code}-${studentId || "anon"}-${stamp}.jpg`;
-    const thumbPath = `${event.slug}/${task.id}/${team.code}-${studentId || "anon"}-${stamp}-thumb.webp`;
-
-    const fullUpload = await supabase.storage
-      .from("submissions")
-      .upload(fullPath, full, { contentType: "image/jpeg", upsert: false });
-    if (fullUpload.error) {
-      return { ok: false, error: "上傳失敗，再試一次" };
-    }
-    uploaded.push(fullPath);
-
-    const thumbUpload = await supabase.storage
-      .from("submissions")
-      .upload(thumbPath, thumb, { contentType: "image/webp", upsert: false });
-    if (thumbUpload.error) {
-      await supabase.storage.from("submissions").remove(uploaded);
-      return { ok: false, error: "上傳失敗，再試一次" };
-    }
-    uploaded.push(thumbPath);
-
+  if (hasNewPhoto) {
     imageUrls = [supabase.storage.from("submissions").getPublicUrl(fullPath).data.publicUrl];
     thumbUrls = [supabase.storage.from("submissions").getPublicUrl(thumbPath).data.publicUrl];
   }
@@ -222,7 +265,7 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
   if (existing) {
     const updated = await supabase.from("submissions").update(payload).eq("id", existing.id).select("id").single();
     if (updated.error || !updated.data) {
-      if (uploaded.length) await supabase.storage.from("submissions").remove(uploaded);
+      if (hasNewPhoto) await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
       return { ok: false, error: "上傳失敗，再試一次" };
     }
     if (hasNewPhoto) {
@@ -252,11 +295,11 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
       .single();
     inserted = retry.data;
     if (retry.error || !inserted) {
-      if (uploaded.length) await supabase.storage.from("submissions").remove(uploaded);
+      if (hasNewPhoto) await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
       return { ok: false, error: "上傳失敗，再試一次" };
     }
   } else if (first.error || !first.data) {
-    if (uploaded.length) await supabase.storage.from("submissions").remove(uploaded);
+    if (hasNewPhoto) await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
     return { ok: false, error: "上傳失敗，再試一次" };
   } else {
     inserted = first.data;

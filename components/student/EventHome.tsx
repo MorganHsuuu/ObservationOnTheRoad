@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "@phosphor-icons/react";
 import { getStudentBoard } from "@/app/actions/student";
 import { Md } from "@/components/Markdown";
 import { UploadForm } from "@/components/student/UploadForm";
@@ -325,7 +326,7 @@ function TaskTrack({
                             : "border-ink"
                   }`}
                 >
-                  {done ? "✓" : ""}
+                  {done ? <Check weight="bold" size={16} className="block" aria-hidden /> : null}
                 </span>
                 <span className={`text-[11px] font-black ${done || current || selected ? "text-ink" : "text-muted"}`}>
                   {code}

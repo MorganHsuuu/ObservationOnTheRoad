@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getStudentBoard, uploadSubmission } from "@/app/actions/student";
+import { getStudentBoard, prepareSubmissionUpload, uploadSubmission } from "@/app/actions/student";
 import { Button, Card } from "@/components/ui";
 import { compressForUpload } from "@/lib/compress";
+import { putFileWithProgress } from "@/lib/direct-upload";
 import { readStoredTeam } from "@/lib/team-storage";
 import { uploadAllowed } from "@/lib/task-utils";
 import { sharpImage } from "@/lib/media";
@@ -67,17 +68,14 @@ export function UploadForm({
   }, [event.slug, router, task.id]);
 
   useEffect(() => {
-    if (!busy) {
-      if (progress >= 100) setShownProgress(100);
-      return;
-    }
+    if (!busy) return;
     const timer = window.setInterval(() => {
       setShownProgress((current) => {
         if (progress >= 100) return 100;
         if (current < progress) {
           return Math.min(progress, current + Math.max(1.2, (progress - current) * 0.22));
         }
-        if (progress >= 88 && current < 97) return current + 0.35;
+        if (progress >= 88 && current < 98) return current + 0.45;
         return current;
       });
     }, 70);
@@ -89,12 +87,11 @@ export function UploadForm({
     setFile(next);
     setError("");
     setJustSaved(false);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPreview(String(reader.result));
-      window.setTimeout(() => captionRef.current?.focus(), 50);
-    };
-    reader.readAsDataURL(next);
+    setPreview((current) => {
+      if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+      return URL.createObjectURL(next);
+    });
+    window.setTimeout(() => captionRef.current?.focus(), 50);
   }
 
   function startEdit() {
@@ -127,13 +124,43 @@ export function UploadForm({
     });
   }
 
-  async function submitOnce() {
+  async function sendOnce(
+    pair: Awaited<ReturnType<typeof compressForUpload>> | null,
+    coords: { lat: number | null; lng: number | null },
+  ) {
     const team = readStoredTeam(event.slug);
     if (!team) return { ok: false as const, error: "請先加入組別並選一張照片" };
-    if (!file && !existing) return { ok: false as const, error: "請先拍一張照片" };
-    if (file) setProgress(8);
-    const pair = file ? await compressForUpload(file, setProgress) : null;
-    const coords = await locate();
+    if (!pair && !existing) return { ok: false as const, error: "請先拍一張照片" };
+
+    let fullPath = "";
+    let thumbPath = "";
+    if (pair) {
+      const slot = await prepareSubmissionUpload({
+        slug: event.slug,
+        taskId: task.id,
+        teamId: team.teamId,
+        studentId: team.studentId ?? "",
+      });
+      if (!slot.ok) return slot;
+      setProgress(82);
+      let fullRatio = 0;
+      let thumbRatio = 0;
+      const bump = () => setProgress(82 + Math.round((fullRatio + thumbRatio) * 6));
+      await Promise.all([
+        putFileWithProgress(slot.data.fullSignedUrl, pair.full, "image/jpeg", (ratio) => {
+          fullRatio = ratio;
+          bump();
+        }, { path: slot.data.fullPath, token: slot.data.fullToken }),
+        putFileWithProgress(slot.data.thumbSignedUrl, pair.thumb, "image/jpeg", (ratio) => {
+          thumbRatio = ratio;
+          bump();
+        }, { path: slot.data.thumbPath, token: slot.data.thumbToken }),
+      ]);
+      fullPath = slot.data.fullPath;
+      thumbPath = slot.data.thumbPath;
+      setProgress(94);
+    }
+
     const form = new FormData();
     form.set("slug", event.slug);
     form.set("taskId", task.id);
@@ -143,11 +170,8 @@ export function UploadForm({
     form.set("studentName", team.studentName ?? "");
     if (coords.lat != null) form.set("lat", String(coords.lat));
     if (coords.lng != null) form.set("lng", String(coords.lng));
-    if (pair) {
-      form.set("full", pair.full);
-      form.set("thumb", pair.thumb);
-    }
-    setProgress(92);
+    if (fullPath) form.set("fullPath", fullPath);
+    if (thumbPath) form.set("thumbPath", thumbPath);
     return uploadSubmission(form);
   }
 
@@ -165,17 +189,32 @@ export function UploadForm({
     setProgress(6);
     setShownProgress(4);
     const firstTime = !existing;
+    const coordsPromise = locate();
+    let pair: Awaited<ReturnType<typeof compressForUpload>> | null = null;
+    try {
+      if (file) pair = await compressForUpload(file, setProgress);
+    } catch {
+      setError("照片處理失敗，換一張再試");
+      setBusy(false);
+      setProgress(0);
+      return;
+    }
+    const coords = await coordsPromise;
+
     let lastError = "上傳失敗，再試一次";
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const result = await submitOnce();
+        const result = await sendOnce(pair, coords);
         if (result.ok) {
           setProgress(100);
           setShownProgress(100);
           setBusy(false);
           setEditing(false);
           setFile(null);
-          setPreview(null);
+          setPreview((current) => {
+            if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+            return null;
+          });
           setJustSaved(true);
           setCelebrate(firstTime);
           onUploaded?.();
@@ -197,8 +236,8 @@ export function UploadForm({
       } catch {
         lastError = "上傳失敗，再試一次";
       }
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (attempt < 1) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
       }
     }
     setError(lastError);
@@ -329,9 +368,9 @@ export function UploadForm({
           </label>
           {busy ? (
             <div className="border-2 border-ink bg-card p-3">
-              <div className="mb-2 text-sm font-black">上傳中 {progress}%</div>
+              <div className="mb-2 text-sm font-black">上傳中 {Math.round(shownProgress)}%</div>
               <div className="h-3 border-2 border-ink">
-                <div className="h-full bg-yellow" style={{ width: `${progress}%` }} />
+                <div className="h-full bg-yellow upload-bar" style={{ width: `${shownProgress}%` }} />
               </div>
             </div>
           ) : null}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { Heart } from "@phosphor-icons/react";
 import { toggleSubmissionLike } from "@/app/actions/student";
 import { EmptyState } from "@/components/ui";
 import { createBrowserClient } from "@/lib/supabase/browser";
@@ -9,7 +10,7 @@ import { liveTaskCode, shortTaskTitle } from "@/lib/task-utils";
 import { sanitizeStudentId, teamLabel } from "@/lib/team-code";
 import { readStoredTeam } from "@/lib/team-storage";
 import { formatTaipeiTime } from "@/lib/time";
-import { sharpImage } from "@/lib/media";
+import { sharpImage, tinyImage } from "@/lib/media";
 import type { SubmissionLikeRow, SubmissionWithMeta, TaskRow, TeamRow } from "@/lib/types";
 
 export function GalleryView({
@@ -206,7 +207,7 @@ export function GalleryView({
           {list.map((item) => (
             <article
               key={item.id}
-              className="masonry-item flex cursor-pointer border-2 border-ink bg-card transition-transform hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[6px_6px_0_var(--ink)]"
+              className="masonry-item cursor-pointer border-2 border-ink bg-card transition-transform hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[6px_6px_0_var(--ink)]"
               tabIndex={0}
               onClick={() => setOpenId(item.id)}
               onKeyDown={(event) => {
@@ -219,24 +220,24 @@ export function GalleryView({
                 }
               }}
             >
-              <div className="min-w-0 flex-1">
-                <PhotoFrame item={item} tasks={tasks} />
-                <div className="px-3.5 pt-3.5 pb-4">
-                  <p className="text-[17px] leading-snug font-black">
-                    {item.is_featured ? <span className="float-right text-sm">⭐</span> : null}
-                    {item.caption}
-                  </p>
-                  <time className="mt-2 block text-xs font-medium text-muted">
+              <PhotoFrame item={item} tasks={tasks} />
+              <div className="px-3.5 pt-3.5 pb-4">
+                <p className="text-[17px] leading-snug font-black">
+                  {item.is_featured ? <span className="float-right text-sm">⭐</span> : null}
+                  {item.caption}
+                </p>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <time className="min-w-0 text-xs font-medium text-muted">
                     {formatTaipeiTime(item.created_at)}
                   </time>
+                  <LikeButton
+                    liked={likeState.mine.has(item.id)}
+                    count={likeState.counts.get(item.id) ?? 0}
+                    busy={pendingId === item.id}
+                    onToggle={() => void onLike(item.id)}
+                  />
                 </div>
               </div>
-              <LikeButton
-                liked={likeState.mine.has(item.id)}
-                count={likeState.counts.get(item.id) ?? 0}
-                busy={pendingId === item.id}
-                onToggle={() => void onLike(item.id)}
-              />
             </article>
           ))}
         </div>
@@ -254,21 +255,20 @@ export function GalleryView({
         >
           <div className="w-full max-w-[520px] border-2 border-ink bg-card">
             <PhotoFrame item={open} tasks={tasks} full />
-            <div className="flex items-start gap-3 px-3.5 py-3.5">
-              <div className="min-w-0 flex-1">
-                <p className="font-black">{open.caption}</p>
-                {open.student_name ? (
-                  <p className="mt-1 text-sm font-black text-muted">{open.student_name}</p>
-                ) : null}
-                <time className="mt-2 block text-xs text-muted">{formatTaipeiTime(open.created_at)}</time>
+            <div className="px-3.5 py-3.5">
+              <p className="font-black">{open.caption}</p>
+              {open.student_name ? (
+                <p className="mt-1 text-sm font-black text-muted">{open.student_name}</p>
+              ) : null}
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <time className="min-w-0 text-xs text-muted">{formatTaipeiTime(open.created_at)}</time>
+                <LikeButton
+                  liked={likeState.mine.has(open.id)}
+                  count={likeState.counts.get(open.id) ?? 0}
+                  busy={pendingId === open.id}
+                  onToggle={() => void onLike(open.id)}
+                />
               </div>
-              <LikeButton
-                liked={likeState.mine.has(open.id)}
-                count={likeState.counts.get(open.id) ?? 0}
-                busy={pendingId === open.id}
-                onToggle={() => void onLike(open.id)}
-                compact
-              />
             </div>
             <button
               type="button"
@@ -301,7 +301,7 @@ function PhotoFrame({
     <div className="relative border-b-2 border-ink bg-[#DEDCD4]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={full ? item.image_urls[0] || sharpImage(item) : sharpImage(item)}
+        src={full ? item.image_urls[0] || sharpImage(item) : tinyImage(item) || sharpImage(item)}
         alt={`${title}／${team}${item.student_name ? `／${item.student_name}` : ""}`}
         loading={full ? "eager" : "lazy"}
         decoding="async"
@@ -323,13 +323,11 @@ function LikeButton({
   count,
   busy,
   onToggle,
-  compact = false,
 }: {
   liked: boolean;
   count: number;
   busy: boolean;
   onToggle: () => void;
-  compact?: boolean;
 }) {
   return (
     <button
@@ -337,34 +335,23 @@ function LikeButton({
       aria-label={liked ? "收回愛心" : "按愛心"}
       aria-pressed={liked}
       disabled={busy}
-      className={`${
-        compact
-          ? "flex w-14 shrink-0 flex-col items-center justify-center gap-0.5 border-2 border-ink py-2"
-          : "flex w-[52px] shrink-0 flex-col items-center justify-center gap-1 border-l-2 border-ink"
-      } ${liked ? "bg-yellow" : "bg-card"}`}
+      className="flex shrink-0 items-center gap-1 leading-none"
       onClick={(event) => {
         event.stopPropagation();
         onToggle();
       }}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <HeartIcon filled={liked} />
-      <span className="text-[11px] font-black tabular-nums">{count}</span>
-    </button>
-  );
-}
-
-function HeartIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" className={`h-6 w-6 ${filled ? "heart-pop" : ""}`} aria-hidden>
-      <path
-        d="M12 20.4S4.8 15.6 2.4 11.4C.4 8.1 1.7 4.2 5.4 3.1c1.9-.6 3.9.2 5.1 1.8 1.2-1.6 3.2-2.4 5.1-1.8 3.7 1.1 5 5 3 8.3C19.2 15.6 12 20.4 12 20.4z"
-        fill={filled ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
+      <Heart
+        weight={liked ? "fill" : "regular"}
+        size={22}
+        className={`block ${liked ? "heart-pop text-danger" : "text-ink"}`}
+        aria-hidden
       />
-    </svg>
+      <span className={`text-[13px] font-black tabular-nums ${liked ? "text-danger" : "text-ink"}`}>
+        {count}
+      </span>
+    </button>
   );
 }
 

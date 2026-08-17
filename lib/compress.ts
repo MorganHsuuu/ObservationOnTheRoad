@@ -9,27 +9,29 @@ export async function compressForUpload(
   file: File,
   onProgress?: (percent: number) => void,
 ): Promise<CompressedPair> {
+  onProgress?.(12);
   const full = await imageCompression(file, {
-    maxWidthOrHeight: 1920,
-    maxSizeMB: 0.9,
-    initialQuality: 0.84,
+    maxWidthOrHeight: 1440,
+    maxSizeMB: 0.42,
+    initialQuality: 0.72,
     fileType: "image/jpeg",
     useWebWorker: true,
-    onProgress: (p) => onProgress?.(Math.round(p * 0.7)),
+    onProgress: (percent) => onProgress?.(12 + Math.round(percent * 0.55)),
   });
 
-  const thumb = await imageCompression(file, {
-    maxWidthOrHeight: 960,
-    maxSizeMB: 0.22,
-    initialQuality: 0.86,
-    fileType: "image/webp",
-    useWebWorker: true,
-    onProgress: (p) => onProgress?.(70 + Math.round(p * 0.2)),
+  onProgress?.(70);
+  const thumb = await imageCompression(full, {
+    maxWidthOrHeight: 640,
+    maxSizeMB: 0.08,
+    initialQuality: 0.7,
+    fileType: "image/jpeg",
+    useWebWorker: false,
+    onProgress: (percent) => onProgress?.(70 + Math.round(percent * 0.1)),
   });
 
   const stamp = Date.now();
   return {
     full: new File([full], `full-${stamp}.jpg`, { type: "image/jpeg" }),
-    thumb: new File([thumb], `thumb-${stamp}.webp`, { type: "image/webp" }),
+    thumb: new File([thumb], `thumb-${stamp}.jpg`, { type: "image/jpeg" }),
   };
 }

@@ -89,7 +89,7 @@
 }
 
 .load-stamp-text {
-  fill: var(--ink);
+  fill: #c8c6bf;
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.16em;
