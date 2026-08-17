@@ -5,15 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getStudentBoard } from "@/app/actions/student";
 import { Md } from "@/components/Markdown";
-import { RefreshBar } from "@/components/RefreshBar";
 import { UploadForm } from "@/components/student/UploadForm";
 import { Card } from "@/components/ui";
 import { PageLoader } from "@/components/LoadingMark";
-import { useNavPending } from "@/components/NavigationProvider";
+import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
-import { clearStoredTeam, readStoredTeam } from "@/lib/team-storage";
+import { readStoredTeam, clearStoredTeam } from "@/lib/team-storage";
 import { currentTask, liveTaskCode, shortTaskTitle, sortTasksByOrder } from "@/lib/task-utils";
-import { formatTaipeiDate, nowTaipeiLabel } from "@/lib/time";
 import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function EventHome({
@@ -24,14 +22,12 @@ export function EventHome({
   initialTasks: TaskRow[];
 }) {
   const router = useRouter();
-  const { start } = useNavPending();
   const [team, setTeam] = useState<StoredTeam | null>(null);
   const [booted, setBooted] = useState(false);
   const [eventState, setEventState] = useState(event);
   const [tasks, setTasks] = useState<TaskRow[]>(initialTasks);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [busy, setBusy] = useState(false);
-  const [updated, setUpdated] = useState(nowTaipeiLabel());
   const [banner, setBanner] = useState<TaskRow | null>(null);
   const [openStory, setOpenStory] = useState(false);
   const [openBrief, setOpenBrief] = useState(false);
@@ -41,7 +37,6 @@ export function EventHome({
       if (!silent) setBusy(true);
       const result = await getStudentBoard(event.slug, stored.teamId);
       if (!silent) setBusy(false);
-      setUpdated(nowTaipeiLabel());
       if (!result.ok) {
         clearStoredTeam(event.slug);
         router.replace(`/e/${event.slug}/join`);
@@ -120,6 +115,11 @@ export function EventHome({
     };
   }, [event.id, load, team]);
 
+  const refresh = useCallback(() => {
+    if (team) void load(team);
+  }, [load, team]);
+  useChromeTools({ onRefresh: team ? refresh : undefined, busy });
+
   const latest = useMemo(() => currentTask(tasks), [tasks]);
   const ordered = useMemo(() => sortTasksByOrder(tasks), [tasks]);
   const doneIds = useMemo(() => {
@@ -135,12 +135,6 @@ export function EventHome({
 
   return (
     <div className="pb-16">
-      <RefreshBar
-        lastUpdated={updated}
-        busy={busy}
-        onRefresh={() => void load(team)}
-      />
-
       {banner ? (
         <button
           type="button"
@@ -154,37 +148,7 @@ export function EventHome({
         </button>
       ) : null}
 
-      <div className="mx-auto max-w-[540px] space-y-4 px-4 pt-5">
-        <header className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-black tracking-[0.2em] text-muted">
-              {formatTaipeiDate(event.event_date)}
-              {event.location_name ? ` ・ ${event.location_name}` : ""}
-            </p>
-            <h1 className="mt-1 text-[36px] leading-[0.86] font-black tracking-[-0.02em]">
-              {event.title}
-            </h1>
-          </div>
-          <div className="shrink-0 text-right">
-            <div className="text-[10px] font-black tracking-[0.18em] text-muted">
-              {team.teamCode} {team.teamName}
-            </div>
-            <div className="text-sm font-black">{team.studentName}</div>
-            <div className="text-[11px] font-black text-muted">{team.studentId}</div>
-            <button
-              type="button"
-              className="text-xs font-black text-muted underline"
-              onClick={() => {
-                start("切換組別");
-                clearStoredTeam(event.slug);
-                router.replace(`/e/${event.slug}/join`);
-              }}
-            >
-              換組別
-            </button>
-          </div>
-        </header>
-
+      <div className="mx-auto max-w-[540px] space-y-4 px-4 pt-4">
         {eventState.story_md ? (
           <Fold title="故事設定" open={openStory} onToggle={() => setOpenStory((value) => !value)}>
             <Md source={eventState.story_md} />
