@@ -50,7 +50,7 @@ export function BroadcastHorn({
     let debounce = 0;
     const schedule = () => {
       window.clearTimeout(debounce);
-      debounce = window.setTimeout(() => void load(), 800);
+      debounce = window.setTimeout(() => void load(), 200);
     };
     const supabase = createBrowserClient();
     if (!supabase) {
@@ -69,8 +69,13 @@ export function BroadcastHorn({
         { event: "*", schema: "public", table: "broadcasts", filter: `event_id=eq.${eventId}` },
         schedule,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "broadcast_responses" },
+        schedule,
+      )
       .subscribe();
-    const poll = window.setInterval(() => void load(), 15000);
+    const poll = window.setInterval(() => void load(), 20000);
     return () => {
       window.clearTimeout(ready);
       window.clearTimeout(start);
@@ -107,11 +112,12 @@ export function BroadcastHorn({
       setError(result.error);
       return;
     }
+    setBroadcast(result.data);
+    setResponses([]);
     setCompose(false);
     setBody("");
     setOptions(["", ""]);
     setKind("ack");
-    await load();
   }
 
   async function closeLive() {
@@ -123,7 +129,8 @@ export function BroadcastHorn({
       setError(result.error);
       return;
     }
-    await load();
+    setBroadcast(null);
+    setResponses([]);
   }
 
   const showForm = compose || !broadcast;

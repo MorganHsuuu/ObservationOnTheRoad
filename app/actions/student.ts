@@ -376,14 +376,10 @@ export async function answerBroadcast(input: {
   }
 
   const supabase = createAdminClient();
-  const { data: event } = await supabase.from("events").select("id").eq("slug", input.slug).maybeSingle();
-  if (!event) return { ok: false, error: "找不到這個活動" };
-
   const { data: broadcast } = await supabase
     .from("broadcasts")
-    .select("*")
+    .select("id, kind, options, event_id, status")
     .eq("id", input.broadcastId)
-    .eq("event_id", event.id)
     .eq("status", "live")
     .maybeSingle();
   if (!broadcast) return { ok: false, error: "這則廣播已經結束" };
@@ -396,27 +392,28 @@ export async function answerBroadcast(input: {
     (kind === "choice" && options.includes(answer));
   if (!valid) return { ok: false, error: "請選一個答案" };
 
-  await supabase.from("event_participants").upsert(
-    {
-      event_id: event.id,
-      team_id: input.teamId,
-      student_id: studentId,
-      student_name: studentName,
-      last_seen_at: new Date().toISOString(),
-    },
-    { onConflict: "event_id,student_id" },
-  );
-
-  const { error } = await supabase.from("broadcast_responses").upsert(
-    {
-      broadcast_id: broadcast.id,
-      team_id: input.teamId,
-      student_id: studentId,
-      student_name: studentName,
-      answer,
-    },
-    { onConflict: "broadcast_id,student_id" },
-  );
+  const [{ error }] = await Promise.all([
+    supabase.from("broadcast_responses").upsert(
+      {
+        broadcast_id: broadcast.id,
+        team_id: input.teamId,
+        student_id: studentId,
+        student_name: studentName,
+        answer,
+      },
+      { onConflict: "broadcast_id,student_id" },
+    ),
+    supabase.from("event_participants").upsert(
+      {
+        event_id: broadcast.event_id,
+        team_id: input.teamId,
+        student_id: studentId,
+        student_name: studentName,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "event_id,student_id" },
+    ),
+  ]);
   if (error) return { ok: false, error: "送出失敗，再試一次" };
   return { ok: true, data: undefined };
 }

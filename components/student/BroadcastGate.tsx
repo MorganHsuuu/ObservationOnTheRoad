@@ -23,6 +23,7 @@ export function BroadcastGate({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const eventIdRef = useRef<string | null>(null);
+  const pendingRef = useRef(false);
   const loadingRef = useRef(false);
 
   const applyBroadcast = useCallback((live: BroadcastRow | null, hasAnswered: boolean) => {
@@ -32,45 +33,51 @@ export function BroadcastGate({ slug }: { slug: string }) {
 
   const load = useCallback(
     async (stored: StoredTeam) => {
-      if (loadingRef.current) return;
+      if (loadingRef.current) {
+        pendingRef.current = true;
+        return;
+      }
       loadingRef.current = true;
       try {
-        const supabase = createBrowserClient();
-        if (supabase) {
-          let eventId = eventIdRef.current;
-          if (!eventId) {
-            const { data: event } = await supabase
-              .from("events")
-              .select("id")
-              .eq("slug", slug)
+        do {
+          pendingRef.current = false;
+          const supabase = createBrowserClient();
+          if (supabase) {
+            let eventId = eventIdRef.current;
+            if (!eventId) {
+              const { data: event } = await supabase
+                .from("events")
+                .select("id")
+                .eq("slug", slug)
+                .maybeSingle();
+              eventId = event?.id ?? null;
+              eventIdRef.current = eventId;
+            }
+            if (!eventId) return;
+            const { data: live } = await supabase
+              .from("broadcasts")
+              .select("*")
+              .eq("event_id", eventId)
+              .eq("status", "live")
               .maybeSingle();
-            eventId = event?.id ?? null;
-            eventIdRef.current = eventId;
+            if (!live) {
+              applyBroadcast(null, false);
+              continue;
+            }
+            const { data: response } = await supabase
+              .from("broadcast_responses")
+              .select("id")
+              .eq("broadcast_id", live.id)
+              .eq("student_id", stored.studentId)
+              .maybeSingle();
+            applyBroadcast(live as BroadcastRow, Boolean(response));
+            continue;
           }
-          if (!eventId) return;
-          const { data: live } = await supabase
-            .from("broadcasts")
-            .select("*")
-            .eq("event_id", eventId)
-            .eq("status", "live")
-            .maybeSingle();
-          if (!live) {
-            applyBroadcast(null, false);
-            return;
-          }
-          const { data: response } = await supabase
-            .from("broadcast_responses")
-            .select("id")
-            .eq("broadcast_id", live.id)
-            .eq("student_id", stored.studentId)
-            .maybeSingle();
-          applyBroadcast(live as BroadcastRow, Boolean(response));
-          return;
-        }
 
-        const result = await getStudentBroadcast(slug, stored.studentId);
-        if (!result.ok) return;
-        applyBroadcast(result.data.broadcast, result.data.answered);
+          const result = await getStudentBroadcast(slug, stored.studentId);
+          if (!result.ok) return;
+          applyBroadcast(result.data.broadcast, result.data.answered);
+        } while (pendingRef.current);
       } finally {
         loadingRef.current = false;
       }
@@ -105,7 +112,7 @@ export function BroadcastGate({ slug }: { slug: string }) {
         studentName: stored.studentName,
       });
 
-      poll = window.setInterval(() => void load(stored), 12000);
+      poll = window.setInterval(() => void load(stored), 8000);
       presence = window.setInterval(() => {
         void touchPresence(slug, {
           teamId: stored.teamId,
@@ -164,6 +171,7 @@ export function BroadcastGate({ slug }: { slug: string }) {
     if (busy) return;
     setBusy(true);
     setError("");
+    setAnswered(true);
     const result = await answerBroadcast({
       slug,
       broadcastId: live.id,
@@ -174,10 +182,9 @@ export function BroadcastGate({ slug }: { slug: string }) {
     });
     setBusy(false);
     if (!result.ok) {
+      setAnswered(false);
       setError(result.error);
-      return;
     }
-    setAnswered(true);
   }
 
   return (

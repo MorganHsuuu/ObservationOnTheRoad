@@ -631,7 +631,6 @@ export async function publishBroadcast(
     .select("*")
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "發布失敗" };
-  refreshEvent(slug);
   return { ok: true, data: data as BroadcastRow };
 }
 
@@ -643,6 +642,5 @@ export async function closeBroadcast(slug: string, broadcastId: string): Promise
     .update({ status: "closed" })
     .eq("id", broadcastId);
   if (error) return { ok: false, error: error.message };
-  refreshEvent(slug);
   return { ok: true, data: undefined };
 }
