@@ -6,6 +6,7 @@ import { Check } from "@phosphor-icons/react";
 import { getStudentBoard } from "@/app/actions/student";
 import { Md } from "@/components/Markdown";
 import { UploadForm } from "@/components/student/UploadForm";
+import { NewTaskAlert } from "@/components/student/NewTaskAlert";
 import { Card } from "@/components/ui";
 import { PageLoader } from "@/components/LoadingMark";
 import { useChromeTools } from "@/components/SiteChrome";
@@ -34,6 +35,8 @@ export function EventHome({
   const [openNotes, setOpenNotes] = useState(false);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [justDoneId, setJustDoneId] = useState<string | null>(null);
+  const [boardReady, setBoardReady] = useState(false);
+  const tasksRef = useRef<TaskRow[]>(initialTasks);
 
   const load = useCallback(
     async (stored: StoredTeam, silent = false) => {
@@ -47,8 +50,10 @@ export function EventHome({
       }
       setEventState(result.data.event);
       setTasks(result.data.tasks);
+      tasksRef.current = result.data.tasks;
       setSubmissions(result.data.submissions);
       setUpdatedAt(nowTaipeiLabel());
+      setBoardReady(true);
     },
     [event.slug, router],
   );
@@ -96,9 +101,11 @@ export function EventHome({
         (payload) => {
           const next = payload.new as TaskRow | undefined;
           if (next?.status === "published") {
-            setBanner(next);
-            setPickedId(next.id);
-            navigator.vibrate?.(200);
+            const prev = tasksRef.current.find((task) => task.id === next.id);
+            if (!prev || prev.status === "draft") {
+              setBanner(next);
+              navigator.vibrate?.(200);
+            }
           }
           if (team) void load(team);
         },
@@ -138,6 +145,16 @@ export function EventHome({
     return new Set(mine.map((item) => item.task_id));
   }, [submissions, team]);
   const selected = allTasks.find((task) => task.id === pickedId) ?? latest ?? null;
+  const selectedMine = useMemo(() => {
+    if (!selected) return null;
+    return (
+      submissions.find(
+        (item) =>
+          item.task_id === selected.id &&
+          (!team?.studentId || !item.student_id || item.student_id === team.studentId),
+      ) ?? null
+    );
+  }, [selected, submissions, team]);
 
   if (!booted) {
     return <PageLoader label="載入任務" />;
@@ -147,20 +164,21 @@ export function EventHome({
     return <PageLoader label="載入任務" />;
   }
 
+  if (!boardReady) {
+    return <PageLoader label="載入任務" />;
+  }
+
   return (
     <div className="pb-16">
       {banner ? (
-        <button
-          type="button"
-          onClick={() => {
+        <NewTaskAlert
+          task={banner}
+          tasks={allTasks}
+          onView={() => {
+            setPickedId(banner.id);
             setBanner(null);
-            if (banner) setPickedId(banner.id);
-            document.getElementById("current-task")?.scrollIntoView({ behavior: "smooth" });
           }}
-          className="block w-full bg-yellow px-4 py-3 text-center text-base font-black"
-        >
-          🔔 新任務來了！點我查看
-        </button>
+        />
       ) : null}
 
       <div className="mx-auto max-w-[540px] space-y-4 px-4 pt-4">
@@ -202,10 +220,12 @@ export function EventHome({
                 ) : null}
                 <div className="mt-4">
                   <UploadForm
+                    key={selected.id}
                     event={eventState}
                     task={selected}
                     compact
                     code={boardTaskCode(selected.id, allTasks)}
+                    known={selectedMine}
                     onUploaded={(firstTime) => {
                       if (firstTime) setJustDoneId(selected.id);
                       void load(team);

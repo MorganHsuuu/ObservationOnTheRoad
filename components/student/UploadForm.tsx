@@ -9,7 +9,7 @@ import { compressForUpload } from "@/lib/compress";
 import { putFileWithProgress } from "@/lib/direct-upload";
 import { readStoredTeam } from "@/lib/team-storage";
 import { uploadAllowed } from "@/lib/task-utils";
-import { sharpImage } from "@/lib/media";
+import { sharpImage, tinyImage } from "@/lib/media";
 import type { EventRow, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function UploadForm({
@@ -18,15 +18,17 @@ export function UploadForm({
   compact = false,
   onUploaded,
   code,
+  known = null,
 }: {
   event: EventRow;
   task: TaskRow;
   compact?: boolean;
   onUploaded?: (firstTime: boolean) => void;
   code?: string;
+  known?: SubmissionRow | null;
 }) {
   const router = useRouter();
-  const [mine, setMine] = useState<SubmissionRow[]>([]);
+  const [mine, setMine] = useState<SubmissionRow[]>(() => (known ? [known] : []));
   const captionRef = useRef<HTMLTextAreaElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -56,6 +58,10 @@ export function UploadForm({
       : mine;
     return mineOnly[0] ?? null;
   }, [event.slug, mine]);
+
+  useEffect(() => {
+    if (known) setMine([known]);
+  }, [known]);
 
   useEffect(() => {
     const team = readStoredTeam(event.slug);
@@ -307,9 +313,9 @@ export function UploadForm({
               你的回傳
             </div>
           )}
-          {sharpImage(existing) ? (
+          {tinyImage(existing) || sharpImage(existing) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={sharpImage(existing)} alt="" className="w-full" />
+            <img src={tinyImage(existing) || sharpImage(existing)} alt="" className="w-full" />
           ) : null}
           <div className="px-3.5 py-3">
             <p className="font-black">{existing.caption || "（沒有說明）"}</p>
