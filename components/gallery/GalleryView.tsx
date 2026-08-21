@@ -130,14 +130,6 @@ export function GalleryView({
 
   const open = list.find((item) => item.id === openId) ?? labeledAll.find((item) => item.id === openId);
 
-  useEffect(() => {
-    if (!openId) return;
-    const full = open?.image_urls[0];
-    if (!full) return;
-    const img = new Image();
-    img.src = full;
-  }, [open, openId]);
-
   async function onLike(submissionId: string) {
     if (pendingId === submissionId) return;
     const id = likerId || ensureGuestLiker(eventSlug);
@@ -254,7 +246,7 @@ export function GalleryView({
           }}
         >
           <div className="w-full max-w-[520px] border-2 border-ink bg-card">
-            <PhotoFrame item={open} tasks={tasks} full />
+            <PhotoFrame key={open.id} item={open} tasks={tasks} full />
             <div className="px-3.5 py-3.5">
               <p className="font-black">{open.caption}</p>
               {open.student_name ? (
@@ -296,17 +288,42 @@ function PhotoFrame({
   const code = liveTaskCode(item.task.id, tasks);
   const title = shortTaskTitle(item.task.title);
   const team = teamLabel(item.team);
+  const thumb = tinyImage(item);
+  const fullSrc = item.image_urls[0] || sharpImage(item);
+  const alt = `${title}／${team}${item.student_name ? `／${item.student_name}` : ""}`;
+  const [fullReady, setFullReady] = useState(false);
 
   return (
     <div className="relative border-b-2 border-ink bg-[#DEDCD4]">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={full ? item.image_urls[0] || sharpImage(item) : tinyImage(item) || sharpImage(item)}
-        alt={`${title}／${team}${item.student_name ? `／${item.student_name}` : ""}`}
-        loading={full ? "eager" : "lazy"}
-        decoding="async"
-        className={full ? "max-h-[56vh] w-full object-contain" : "block w-full"}
-      />
+      {full ? (
+        <div className={`relative ${thumb ? "" : "min-h-[42vh]"}`}>
+          {thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumb}
+              alt=""
+              aria-hidden
+              className="max-h-[56vh] w-full object-contain"
+            />
+          ) : null}
+          {fullSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={fullSrc}
+              alt={alt}
+              loading="eager"
+              decoding="async"
+              onLoad={() => setFullReady(true)}
+              className={`max-h-[56vh] w-full object-contain ${
+                thumb ? "absolute inset-0 h-full" : ""
+              } ${fullReady || !thumb ? "opacity-100" : "opacity-0"}`}
+            />
+          ) : null}
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumb || fullSrc} alt={alt} loading="lazy" decoding="async" className="block w-full" />
+      )}
       <div className="absolute inset-x-0 bottom-0 bg-ink/80 px-3 py-2 text-paper">
         <p className="text-[11px] font-black tracking-[0.12em] text-yellow">
           任務 {code}・{title}
