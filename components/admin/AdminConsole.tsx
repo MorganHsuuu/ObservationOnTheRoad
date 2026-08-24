@@ -20,7 +20,6 @@ import type {
   TeamRow,
 } from "@/lib/types";
 import { BroadcastHorn } from "@/components/admin/BroadcastPanel";
-import { QrModal } from "@/components/admin/QrModal";
 import { StudentRoster } from "@/components/admin/StudentRoster";
 
 export function AdminConsole({
@@ -61,7 +60,6 @@ export function AdminConsole({
   const [undo, setUndo] = useState<{ task: TaskRow; left: number } | null>(null);
   const [error, setError] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
-  const [qrOpen, setQrOpen] = useState(false);
   const [progressTaskId, setProgressTaskId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskRow | null>(null);
 
@@ -228,17 +226,7 @@ export function AdminConsole({
               {offline ? "檢查網路後重試" : event.title}
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <BroadcastHorn slug={event.slug} eventId={event.id} teams={teamList} />
-            <button
-              type="button"
-              onClick={() => setQrOpen(true)}
-              className="flex h-11 w-11 items-center justify-center border-2 border-ink bg-card text-sm font-black"
-              aria-label="顯示 QR"
-            >
-              QR
-            </button>
-          </div>
+          <BroadcastHorn slug={event.slug} eventId={event.id} teams={teamList} />
         </div>
       </div>
 
@@ -513,7 +501,6 @@ export function AdminConsole({
         </Button>
       </Modal>
 
-      <QrModal open={qrOpen} slug={event.slug} onClose={() => setQrOpen(false)} />
     </div>
   );
 }
