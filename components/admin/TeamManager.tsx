@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CaretDown, CaretUp } from "@phosphor-icons/react";
-import { deleteTeam, upsertTeam } from "@/app/actions/admin";
+import { deleteTeam, moveParticipant, removeParticipant, renameParticipant, upsertTeam } from "@/app/actions/admin";
 import { ProgressPie } from "@/components/ProgressPie";
 import { Button, Card } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
 import { isStudentOnline } from "@/lib/broadcast";
 import { membersOfTeam, studentDoneTask, teamTaskProgress } from "@/lib/progress";
 import { boardTaskCode, currentTask } from "@/lib/task-utils";
-import { digitsOnly, teamLabel } from "@/lib/team-code";
+import { digitsOnly, sanitizeStudentId, teamLabel } from "@/lib/team-code";
 import type { ParticipantRow, TaskRow, TeamRow } from "@/lib/types";
 
 export function TeamManager({
@@ -30,12 +30,17 @@ export function TeamManager({
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [people, setPeople] = useState(participants);
   const busyRef = useRef(false);
   const published = currentTask(tasks);
   const released = useMemo(
     () => tasks.filter((task) => task.status === "published" || task.status === "closed"),
     [tasks],
   );
+
+  useEffect(() => {
+    setPeople(participants);
+  }, [participants]);
 
   useEffect(() => {
     busyRef.current = busy;
@@ -63,6 +68,65 @@ export function TeamManager({
     }
   }
 
+  async function onMove(person: ParticipantRow, teamId: string) {
+    if (busy || person.team_id === teamId) return;
+    const from = teamLabel(teams.find((item) => item.id === person.team_id));
+    const to = teamLabel(teams.find((item) => item.id === teamId));
+    if (!window.confirm(`把 ${person.student_name} 從${from}改到${to}？已交的照片會跟著過去。`)) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const result = await moveParticipant(slug, person.id, teamId);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setPeople((list) => list.map((item) => (item.id === person.id ? { ...item, team_id: teamId } : item)));
+  }
+
+  async function onRename(person: ParticipantRow, studentId: string) {
+    const nextId = sanitizeStudentId(studentId);
+    if (busy || !nextId || nextId === person.student_id) return;
+    if (
+      !window.confirm(
+        `把 ${person.student_name} 的學號改成 ${nextId}？這台手機要重新加入，請填新學號。已交的照片會跟著過去。`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const result = await renameParticipant(slug, person.id, nextId);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setPeople((list) => list.map((item) => (item.id === person.id ? { ...item, student_id: nextId } : item)));
+  }
+
+  async function onRemove(person: ParticipantRow) {
+    if (busy) return;
+    if (
+      !window.confirm(
+        `把 ${person.student_name} 從名單刪掉？這台手機要重新加入才能進來。已交的照片還在，加入正確組別後會跟著過去。`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const result = await removeParticipant(slug, person.id);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setPeople((list) => list.filter((item) => item.id !== person.id));
+  }
+
   async function onDelete(team: TeamRow) {
     if (busy) return;
     const label = teamLabel(team);
@@ -83,8 +147,8 @@ export function TeamManager({
   return (
     <div className="space-y-3">
       {teams.map((team) => {
-        const members = membersOfTeam(participants, team.id);
-        const { done, total } = teamTaskProgress(team.id, published?.id ?? null, participants, submissions);
+        const members = membersOfTeam(people, team.id);
+        const { done, total } = teamTaskProgress(team.id, published?.id ?? null, people, submissions);
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         const open = openId === team.id;
         return (
@@ -137,7 +201,6 @@ export function TeamManager({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-baseline gap-x-2">
                             <span className="font-black">{person.student_name}</span>
-                            <span className="text-xs font-black text-muted">{person.student_id}</span>
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {released.length === 0 ? (
@@ -157,6 +220,40 @@ export function TeamManager({
                                 );
                               })
                             )}
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            <StudentIdField
+                              key={`${person.id}:${person.student_id}`}
+                              name={person.student_name}
+                              studentId={person.student_id}
+                              busy={busy}
+                              onSave={(value) => void onRename(person, value)}
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              {teams.length > 1 ? (
+                                <select
+                                  value={person.team_id}
+                                  disabled={busy}
+                                  aria-label={`把 ${person.student_name} 換組`}
+                                  className="h-11 min-w-[7.5rem] flex-1 border-2 border-ink bg-card px-2 text-sm font-black disabled:opacity-50"
+                                  onChange={(event) => void onMove(person, event.target.value)}
+                                >
+                                  {teams.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                      {teamLabel(item)}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : null}
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className="h-11 shrink-0 px-3 text-sm font-black text-danger disabled:opacity-50"
+                                onClick={() => void onRemove(person)}
+                              >
+                                刪除
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -219,5 +316,46 @@ export function TeamManager({
         ) : null}
       </Card>
     </div>
+  );
+}
+
+function StudentIdField({
+  name,
+  studentId,
+  busy,
+  onSave,
+}: {
+  name: string;
+  studentId: string;
+  busy: boolean;
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(studentId);
+  const dirty = sanitizeStudentId(value) !== studentId && sanitizeStudentId(value).length > 0;
+
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (dirty) onSave(value);
+      }}
+    >
+      <input
+        value={value}
+        disabled={busy}
+        maxLength={32}
+        aria-label={`${name} 的學號`}
+        className="h-11 min-w-0 flex-1 border-2 border-ink bg-card px-2 text-sm font-black disabled:opacity-50"
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <button
+        type="submit"
+        disabled={busy || !dirty}
+        className="h-11 shrink-0 px-3 text-sm font-black disabled:opacity-40"
+      >
+        改學號
+      </button>
+    </form>
   );
 }

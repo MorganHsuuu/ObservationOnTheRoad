@@ -199,7 +199,7 @@ export function GalleryView({
           {list.map((item) => (
             <article
               key={item.id}
-              className="masonry-item cursor-pointer border-2 border-ink bg-card transition-transform hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[6px_6px_0_var(--ink)]"
+              className="masonry-item relative cursor-pointer border-2 border-ink bg-card transition-transform hover:-translate-x-[3px] hover:-translate-y-[3px] hover:shadow-[6px_6px_0_var(--ink)]"
               tabIndex={0}
               onClick={() => setOpenId(item.id)}
               onKeyDown={(event) => {
@@ -213,6 +213,11 @@ export function GalleryView({
               }}
             >
               <PhotoFrame item={item} tasks={tasks} />
+              {item.image_urls.length > 1 ? (
+                <span className="absolute top-2 right-2 z-10 bg-ink px-2 py-0.5 text-[11px] font-black text-paper">
+                  {item.image_urls.length} 張
+                </span>
+              ) : null}
               <div className="px-3.5 pt-3.5 pb-4">
                 <p className="text-[17px] leading-snug font-black">
                   {item.is_featured ? <span className="float-right text-sm">⭐</span> : null}
@@ -247,6 +252,10 @@ export function GalleryView({
         >
           <div className="w-full max-w-[520px] border-2 border-ink bg-card">
             <PhotoFrame key={open.id} item={open} tasks={tasks} full />
+            {open.image_urls.slice(1).map((src) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={src} src={src} alt="" className="max-h-[42vh] w-full border-t-2 border-ink object-contain bg-[#DEDCD4]" />
+            ))}
             <div className="px-3.5 py-3.5">
               <p className="font-black">{open.caption}</p>
               {open.student_name ? (

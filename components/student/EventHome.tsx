@@ -11,7 +11,7 @@ import { Card } from "@/components/ui";
 import { PageLoader } from "@/components/LoadingMark";
 import { useChromeTools } from "@/components/SiteChrome";
 import { createBrowserClient } from "@/lib/supabase/browser";
-import { readStoredTeam, clearStoredTeam } from "@/lib/team-storage";
+import { readStoredTeam, clearStoredTeam, writeStoredTeam } from "@/lib/team-storage";
 import { boardTaskCode, currentTask, shortTaskTitle, sortTasksByOrder } from "@/lib/task-utils";
 import { nowTaipeiLabel } from "@/lib/time";
 import type { EventRow, StoredTeam, SubmissionRow, TaskRow } from "@/lib/types";
@@ -41,12 +41,22 @@ export function EventHome({
   const load = useCallback(
     async (stored: StoredTeam, silent = false) => {
       if (!silent) setBusy(true);
-      const result = await getStudentBoard(event.slug, stored.teamId);
+      const result = await getStudentBoard(event.slug, stored.teamId, stored.studentId);
       if (!silent) setBusy(false);
       if (!result.ok) {
         clearStoredTeam(event.slug);
         router.replace(`/e/${event.slug}/join`);
         return;
+      }
+      if (result.data.team.id !== stored.teamId) {
+        const next = {
+          ...stored,
+          teamId: result.data.team.id,
+          teamName: result.data.team.name,
+          teamCode: result.data.team.code,
+        };
+        writeStoredTeam(next);
+        setTeam(next);
       }
       setEventState(result.data.event);
       setTasks(result.data.tasks);
@@ -113,6 +123,13 @@ export function EventHome({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "events", filter: `id=eq.${event.id}` },
+        () => {
+          if (team) void load(team);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "event_participants", filter: `event_id=eq.${event.id}` },
         () => {
           if (team) void load(team);
         },

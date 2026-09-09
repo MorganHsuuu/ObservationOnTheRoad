@@ -22,7 +22,7 @@ export default async function TeamsPage(props: PageProps<"/admin/e/[slug]/teams"
     <div className="mx-auto max-w-[640px] px-4 pt-8 pb-6">
       <h1 className="text-4xl font-black">組別</h1>
       <p className="mt-2 mb-6 text-sm font-medium text-muted">
-        點開一組看成員、進入代碼，以及每個人交到哪一題。
+        點開一組看成員。進錯組就改組別，或刪掉後讓學生重新加入。
       </p>
       <TeamManager
         slug={slug}

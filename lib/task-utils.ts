@@ -86,3 +86,7 @@ export function taskStatusLabel(status: TaskRow["status"]) {
 export function uploadAllowed(task: Pick<TaskRow, "status">) {
   return task.status === "published";
 }
+
+export function clampMaxPhotos(value: unknown) {
+  return Math.min(3, Math.max(1, Number(value) || 1));
+}

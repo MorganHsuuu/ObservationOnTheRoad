@@ -381,10 +381,15 @@ export function AdminConsole({
           <div className="max-h-72 overflow-y-auto">
             {feed.map((item) => (
               <div key={item.id} className="flex items-start gap-2.5 border-b border-[#DEDCD4] px-3.5 py-2.5 last:border-b-0">
-                <div className="h-[52px] w-[52px] shrink-0 overflow-hidden border-2 border-ink bg-[#DEDCD4]">
+                <div className="h-[52px] w-[52px] shrink-0 overflow-hidden border-2 border-ink bg-[#DEDCD4] relative">
                   {item.thumb_urls[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={item.thumb_urls[0]} alt="" className="h-full w-full object-cover" />
+                  ) : null}
+                  {item.image_urls.length > 1 ? (
+                    <span className="absolute right-0 bottom-0 bg-ink px-1 text-[10px] font-black text-paper">
+                      {item.image_urls.length}
+                    </span>
                   ) : null}
                 </div>
                 <div className="flex-1">

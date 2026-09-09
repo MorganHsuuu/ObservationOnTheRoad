@@ -8,8 +8,8 @@ import { Button, Card } from "@/components/ui";
 import { compressForUpload } from "@/lib/compress";
 import { putFileWithProgress } from "@/lib/direct-upload";
 import { readStoredTeam } from "@/lib/team-storage";
-import { uploadAllowed } from "@/lib/task-utils";
-import { sharpImage, tinyImage } from "@/lib/media";
+import { uploadAllowed, clampMaxPhotos } from "@/lib/task-utils";
+import { photoSlots, sharpImage, tinyImage } from "@/lib/media";
 import type { EventRow, SubmissionRow, TaskRow } from "@/lib/types";
 
 export function UploadForm({
@@ -37,6 +37,8 @@ export function UploadForm({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
+  const [addMore, setAddMore] = useState(false);
+  const [replaceIndex, setReplaceIndex] = useState<number | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [shownProgress, setShownProgress] = useState(0);
@@ -48,7 +50,7 @@ export function UploadForm({
   } | null>(null);
   const coordsRef = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
 
-  const liveTask = boardTask?.id === task.id ? boardTask : task;
+  const liveTask = boardTask?.id === task.id ? { ...boardTask, ...task } : task;
   const closed = liveTask.status === "closed";
   const canUpload = uploadAllowed(liveTask);
   const existing = useMemo(() => {
@@ -58,10 +60,19 @@ export function UploadForm({
       : mine;
     return mineOnly[0] ?? null;
   }, [event.slug, mine]);
+  const maxPhotos = clampMaxPhotos(liveTask.max_photos);
+  const slots = existing ? photoSlots(existing) : [];
+  const remaining = Math.max(0, maxPhotos - slots.length);
+  const canAdd = canUpload && remaining > 0;
+  const multi = maxPhotos > 1;
 
   useEffect(() => {
     if (known) setMine([known]);
   }, [known]);
+
+  useEffect(() => {
+    setBoardTask((current) => (current?.id === task.id ? { ...current, ...task } : current));
+  }, [task]);
 
   useEffect(() => {
     const team = readStoredTeam(event.slug);
@@ -69,7 +80,7 @@ export function UploadForm({
       router.replace(`/e/${event.slug}/join`);
       return;
     }
-    void getStudentBoard(event.slug, team.teamId).then((result) => {
+    void getStudentBoard(event.slug, team.teamId, team.studentId).then((result) => {
       if (!result.ok) return;
       const fresh = result.data.tasks.find((item) => item.id === task.id);
       if (fresh) setBoardTask(fresh);
@@ -130,10 +141,39 @@ export function UploadForm({
 
   function startEdit() {
     setEditing(true);
+    setAddMore(false);
+    setReplaceIndex(multi ? null : 0);
     setJustSaved(false);
     setCelebrate(false);
     setCaption(existing?.caption ?? "");
-    setPreview(existing ? sharpImage(existing) : null);
+    setPreview(existing && !multi ? sharpImage(existing) : null);
+    setFile(null);
+    setError("");
+    prepRef.current = null;
+  }
+
+  function startAdd() {
+    setAddMore(true);
+    setEditing(false);
+    setReplaceIndex(null);
+    setJustSaved(false);
+    setCelebrate(false);
+    setCaption(existing?.caption ?? "");
+    setPreview(null);
+    setFile(null);
+    setError("");
+    prepRef.current = null;
+  }
+
+  function startReplace(index: number) {
+    const slot = slots[index];
+    setEditing(true);
+    setAddMore(false);
+    setReplaceIndex(index);
+    setJustSaved(false);
+    setCelebrate(false);
+    setCaption(existing?.caption ?? "");
+    setPreview(slot?.full || slot?.thumb || null);
     setFile(null);
     setError("");
     prepRef.current = null;
@@ -141,6 +181,8 @@ export function UploadForm({
 
   function cancelEdit() {
     setEditing(false);
+    setAddMore(false);
+    setReplaceIndex(null);
     setFile(null);
     setPreview(null);
     setCaption("");
@@ -213,12 +255,18 @@ export function UploadForm({
     if (coords.lng != null) form.set("lng", String(coords.lng));
     if (fullPath) form.set("fullPath", fullPath);
     if (thumbPath) form.set("thumbPath", thumbPath);
+    if (addMore) form.set("adding", "1");
+    if (replaceIndex != null) form.set("replaceIndex", String(replaceIndex));
     return uploadSubmission(form);
   }
 
   async function onSubmit(eventForm: React.FormEvent) {
     eventForm.preventDefault();
     if (busy) return;
+    if (addMore && !file) {
+      setError("請先拍一張照片");
+      return;
+    }
     if (!file && !existing) return;
     if (task.requires_caption && !caption.trim()) {
       setError("寫一句話再說說你為什麼拍它");
@@ -229,7 +277,7 @@ export function UploadForm({
     setError("");
     setProgress(18);
     setShownProgress(12);
-    const firstTime = !existing;
+    const firstTime = slots.length === 0;
     let pair: Awaited<ReturnType<typeof compressForUpload>> | null = null;
     try {
       if (file) {
@@ -256,6 +304,8 @@ export function UploadForm({
           setShownProgress(100);
           setBusy(false);
           setEditing(false);
+          setAddMore(false);
+          setReplaceIndex(null);
           setFile(null);
           setPreview((current) => {
             if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
@@ -266,7 +316,7 @@ export function UploadForm({
           onUploaded?.(firstTime);
           const team = readStoredTeam(event.slug);
           if (team) {
-            void getStudentBoard(event.slug, team.teamId).then((board) => {
+            void getStudentBoard(event.slug, team.teamId, team.studentId).then((board) => {
               if (!board.ok) return;
               const rows = board.data.submissions.filter((item) => item.task_id === task.id);
               setMine(
@@ -291,7 +341,7 @@ export function UploadForm({
     setProgress(0);
   }
 
-  const showForm = canUpload && (!existing || editing);
+  const showForm = canUpload && (!existing || editing || addMore);
 
   return (
     <div className="space-y-4">
@@ -304,16 +354,58 @@ export function UploadForm({
         </Card>
       ) : null}
 
-      {existing && !editing ? (
+      {existing && !editing && !addMore ? (
         <Card className="overflow-hidden">
           {justSaved ? (
-            <div className="bg-yellow px-3.5 py-3 text-base font-black">這題完成了。每人一張。</div>
+            <div className="bg-yellow px-3.5 py-3 text-base font-black">
+              {remaining > 0
+                ? `這題完成了。還可以再加 ${remaining} 張。`
+                : multi
+                  ? `這題完成了。${maxPhotos} 張都交了。`
+                  : "這題完成了。每人一張。"}
+            </div>
           ) : (
             <div className="px-3.5 py-2 text-[11px] font-black tracking-[0.2em] text-muted">
-              你的回傳
+              {multi ? `你的回傳・${slots.length}/${maxPhotos} 張` : "你的回傳"}
             </div>
           )}
-          {tinyImage(existing) || sharpImage(existing) ? (
+          {multi || slots.length > 1 ? (
+            <div className="grid grid-cols-2 border-t-2 border-ink">
+              {slots.map((slot, index) => (
+                <button
+                  key={`${slot.full}-${index}`}
+                  type="button"
+                  className={`relative bg-[#DEDCD4] ${index % 2 === 1 ? "border-l-2 border-ink" : ""} ${index >= 2 ? "border-t-2 border-ink" : ""}`}
+                  onClick={() => {
+                    if (canUpload) startReplace(index);
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={slot.thumb || slot.full} alt={`第 ${index + 1} 張`} className="aspect-square w-full object-cover" />
+                  {canUpload ? (
+                    <span className="absolute right-2 bottom-2 bg-ink px-2 py-1 text-[11px] font-black text-paper">
+                      改這張
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+              {canAdd ? (
+                <button
+                  type="button"
+                  className={`flex min-h-36 flex-col items-center justify-center bg-yellow font-black ${slots.length % 2 === 1 ? "border-l-2 border-ink" : ""} ${slots.length >= 2 ? "border-t-2 border-ink" : ""}`}
+                  onClick={startAdd}
+                >
+                  <span className="text-3xl" aria-hidden>
+                    ＋
+                  </span>
+                  <span className="mt-1">再加一張</span>
+                  <span className="mt-1 text-[11px] tracking-[0.12em] text-yellow-deep">
+                    還可以 {remaining} 張
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          ) : tinyImage(existing) || sharpImage(existing) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={tinyImage(existing) || sharpImage(existing)} alt="" className="w-full" />
           ) : null}
@@ -321,7 +413,7 @@ export function UploadForm({
             <p className="font-black">{existing.caption || "（沒有說明）"}</p>
             {canUpload ? (
               <Button className="mt-3 min-h-12 text-[15px]" variant="ghost" onClick={startEdit}>
-                改照片或說明
+                {multi ? "改說明" : "改照片或說明"}
               </Button>
             ) : null}
           </div>
@@ -330,16 +422,60 @@ export function UploadForm({
 
       {showForm ? (
         <form onSubmit={onSubmit} className="space-y-4">
-          {editing ? (
+          {addMore ? (
+            <p className="text-sm font-black">
+              再加一張・現在 {slots.length}/{maxPhotos}
+            </p>
+          ) : null}
+          {editing && replaceIndex != null && multi ? (
+            <p className="text-sm font-black">改第 {replaceIndex + 1} 張，其他張不會動。</p>
+          ) : null}
+          {editing && !multi ? (
             <p className="text-sm font-black">改這張就好，不會再多傳一筆。</p>
           ) : null}
-          {preview ? (
-            <div className="border-2 border-ink bg-[#DEDCD4]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="預覽" className="max-h-72 w-full object-cover" />
-              <div className="grid grid-cols-2 border-t-2 border-ink">
-                <label className="relative flex min-h-12 cursor-pointer items-center justify-center bg-card font-black active:bg-yellow">
-                  重拍
+          {!existing && multi ? (
+            <p className="text-sm font-black">這題最多 {maxPhotos} 張，先交一張也可以再補。</p>
+          ) : null}
+          {!existing || addMore || replaceIndex != null || !multi ? (
+            preview ? (
+              <div className="border-2 border-ink bg-[#DEDCD4]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="預覽" className="max-h-72 w-full object-cover" />
+                <div className="grid grid-cols-2 border-t-2 border-ink">
+                  <label className="relative flex min-h-12 cursor-pointer items-center justify-center bg-card font-black active:bg-yellow">
+                    重拍
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                      onChange={(event) => {
+                        pickFile(event.target.files?.[0] ?? null);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <label className="relative flex min-h-12 cursor-pointer items-center justify-center border-l-2 border-ink bg-card font-black active:bg-yellow">
+                    換一張
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                      onChange={(event) => {
+                        pickFile(event.target.files?.[0] ?? null);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card text-ink active:bg-yellow">
+                  <span className="text-3xl" aria-hidden>
+                    📷
+                  </span>
+                  <span className="mt-2 text-lg font-black">拍照</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -351,8 +487,11 @@ export function UploadForm({
                     }}
                   />
                 </label>
-                <label className="relative flex min-h-12 cursor-pointer items-center justify-center border-l-2 border-ink bg-card font-black active:bg-yellow">
-                  換一張
+                <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card active:bg-yellow">
+                  <span className="text-3xl" aria-hidden>
+                    🖼
+                  </span>
+                  <span className="mt-2 text-lg font-black">選照片</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -364,42 +503,8 @@ export function UploadForm({
                   />
                 </label>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card text-ink active:bg-yellow">
-                <span className="text-3xl" aria-hidden>
-                  📷
-                </span>
-                <span className="mt-2 text-lg font-black">拍照</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  onChange={(event) => {
-                    pickFile(event.target.files?.[0] ?? null);
-                    event.target.value = "";
-                  }}
-                />
-              </label>
-              <label className="relative flex min-h-36 cursor-pointer flex-col items-center justify-center border-2 border-ink bg-card active:bg-yellow">
-                <span className="text-3xl" aria-hidden>
-                  🖼
-                </span>
-                <span className="mt-2 text-lg font-black">選照片</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  onChange={(event) => {
-                    pickFile(event.target.files?.[0] ?? null);
-                    event.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-          )}
+            )
+          ) : null}
 
           <label className="block">
             <span className="mb-2 block text-xs font-black tracking-[0.2em] text-muted">
@@ -426,12 +531,24 @@ export function UploadForm({
           {error ? (
             <p className="bg-danger px-3 py-3 text-sm font-black text-white">{error}</p>
           ) : null}
-          <Button type="submit" disabled={busy || (!file && !existing)}>
-            {busy ? "上傳中…" : error ? "上傳失敗，再試一次" : existing ? "更新回傳" : file ? "送出回傳" : "先拍一張再送出"}
+          <Button type="submit" disabled={busy || (!file && !existing) || (addMore && !file)}>
+            {busy
+              ? "上傳中…"
+              : error
+                ? "上傳失敗，再試一次"
+                : addMore
+                  ? file
+                    ? "送出這一張"
+                    : "先拍一張再送出"
+                  : existing
+                    ? "更新回傳"
+                    : file
+                      ? "送出回傳"
+                      : "先拍一張再送出"}
           </Button>
-          {editing ? (
+          {editing || addMore ? (
             <Button type="button" variant="ghost" className="min-h-12 text-[15px]" onClick={cancelEdit}>
-              先不改
+              {addMore ? "先不加" : "先不改"}
             </Button>
           ) : null}
         </form>

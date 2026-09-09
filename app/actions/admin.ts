@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
+import { reassignStudentId, reassignStudentTeam } from "@/lib/student-team";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { arrangeAfterDraft, arrangeAfterPublish } from "@/lib/task-utils";
-import { finalizeEventPin, finalizeTeamCode, isEventPin, isTeamCode, teamNameFromCode } from "@/lib/team-code";
+import { finalizeEventPin, finalizeTeamCode, isEventPin, isTeamCode, sanitizeStudentId, teamNameFromCode } from "@/lib/team-code";
 import { setAdminEventPinCookie } from "@/lib/event-pin-server";
 import {
   getAdminEvent,
@@ -529,6 +530,102 @@ export async function deleteTeam(slug: string, teamId: string): Promise<ActionRe
   await requireAdmin();
   const supabase = createAdminClient();
   const { error } = await supabase.from("teams").delete().eq("id", teamId);
+  if (error) return { ok: false, error: error.message };
+  refreshEvent(slug);
+  return { ok: true, data: undefined };
+}
+
+export async function moveParticipant(
+  slug: string,
+  participantId: string,
+  teamId: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到場次" };
+
+  const [{ data: person }, { data: team }] = await Promise.all([
+    supabase
+      .from("event_participants")
+      .select("id, student_id")
+      .eq("id", participantId)
+      .eq("event_id", event.id)
+      .maybeSingle(),
+    supabase.from("teams").select("id").eq("id", teamId).eq("event_id", event.id).maybeSingle(),
+  ]);
+  if (!person) return { ok: false, error: "找不到這位學生" };
+  if (!team) return { ok: false, error: "找不到這個組別" };
+
+  const { error } = await supabase
+    .from("event_participants")
+    .update({ team_id: team.id })
+    .eq("id", person.id);
+  if (error) return { ok: false, error: error.message };
+  await reassignStudentTeam(supabase, event.id, person.student_id, team.id);
+  refreshEvent(slug);
+  return { ok: true, data: undefined };
+}
+
+export async function renameParticipant(
+  slug: string,
+  participantId: string,
+  studentId: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const nextId = sanitizeStudentId(studentId);
+  if (!nextId) return { ok: false, error: "請填學號" };
+
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到場次" };
+
+  const { data: person } = await supabase
+    .from("event_participants")
+    .select("id, student_id")
+    .eq("id", participantId)
+    .eq("event_id", event.id)
+    .maybeSingle();
+  if (!person) return { ok: false, error: "找不到這位學生" };
+  if (person.student_id === nextId) return { ok: true, data: undefined };
+
+  const { data: clash } = await supabase
+    .from("event_participants")
+    .select("id")
+    .eq("event_id", event.id)
+    .eq("student_id", nextId)
+    .maybeSingle();
+  if (clash) return { ok: false, error: "這個學號已經有人在用" };
+
+  const { error } = await supabase
+    .from("event_participants")
+    .update({ student_id: nextId })
+    .eq("id", person.id);
+  if (error) {
+    if (error.code === "23505") return { ok: false, error: "這個學號已經有人在用" };
+    return { ok: false, error: error.message };
+  }
+
+  const moved = await reassignStudentId(supabase, event.id, person.student_id, nextId);
+  if (moved && moved.ok === false) return moved;
+
+  refreshEvent(slug);
+  return { ok: true, data: undefined };
+}
+
+export async function removeParticipant(slug: string, participantId: string): Promise<ActionResult> {
+  await requireAdmin();
+  const supabase = createAdminClient();
+  const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  if (!event) return { ok: false, error: "找不到場次" };
+  const { data: person } = await supabase
+    .from("event_participants")
+    .select("id")
+    .eq("id", participantId)
+    .eq("event_id", event.id)
+    .maybeSingle();
+  if (!person) return { ok: false, error: "找不到這位學生" };
+  const { error } = await supabase.from("event_participants").delete().eq("id", person.id);
   if (error) return { ok: false, error: error.message };
   refreshEvent(slug);
   return { ok: true, data: undefined };

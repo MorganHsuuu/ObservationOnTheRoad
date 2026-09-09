@@ -1,8 +1,10 @@
 "use server";
 
 import { mapEventRow } from "@/lib/event-pin";
+import { reassignStudentTeam } from "@/lib/student-team";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { finalizeTeamCode, isTeamCode, sanitizeStudentId, sanitizeStudentName } from "@/lib/team-code";
+import { clampMaxPhotos } from "@/lib/task-utils";
 import type {
   ActionResult,
   BroadcastKind,
@@ -55,6 +57,7 @@ export async function joinTeam(
     },
     { onConflict: "event_id,student_id" },
   );
+  await reassignStudentTeam(supabase, event.id, studentId, team.id);
 
   return {
     ok: true,
@@ -69,7 +72,7 @@ export async function joinTeam(
   };
 }
 
-export async function getStudentBoard(slug: string, teamId: string) {
+export async function getStudentBoard(slug: string, teamId: string, studentId?: string) {
   const supabase = createAdminClient();
   const { data: event } = await supabase
     .from("events")
@@ -78,14 +81,27 @@ export async function getStudentBoard(slug: string, teamId: string) {
     .maybeSingle();
   if (!event) return { ok: false as const, error: "找不到這個活動" };
 
+  let effectiveTeamId = teamId;
+  const sid = sanitizeStudentId(studentId ?? "");
+  if (sid) {
+    const { data: person } = await supabase
+      .from("event_participants")
+      .select("team_id")
+      .eq("event_id", event.id)
+      .eq("student_id", sid)
+      .maybeSingle();
+    if (!person) return { ok: false as const, error: "請重新加入組別" };
+    effectiveTeamId = person.team_id;
+  }
+
   const [{ data: team }, { data: tasks }, { data: submissions }] = await Promise.all([
-    supabase.from("teams").select("*").eq("id", teamId).eq("event_id", event.id).maybeSingle(),
+    supabase.from("teams").select("*").eq("id", effectiveTeamId).eq("event_id", event.id).maybeSingle(),
     supabase
       .from("tasks")
       .select("*")
       .eq("event_id", event.id)
       .order("order_index", { ascending: true }),
-    supabase.from("submissions").select("*").eq("team_id", teamId).order("created_at", { ascending: false }),
+    supabase.from("submissions").select("*").eq("team_id", effectiveTeamId).order("created_at", { ascending: false }),
   ]);
   if (!team) return { ok: false as const, error: "組別已不存在，請重新加入" };
 
@@ -113,6 +129,70 @@ function storagePathFromPublicUrl(url: string) {
 
 function ownedStoragePath(path: string, slug: string) {
   return Boolean(path) && path.startsWith(`${slug}/`) && !path.includes("..") && !path.startsWith("/");
+}
+
+function parseReplaceIndex(value: FormDataEntryValue | null) {
+  if (value == null || value === "") return Number.NaN;
+  return Number(value);
+}
+
+function applyUploadedPhoto(input: {
+  imageUrls: string[];
+  thumbUrls: string[];
+  newFull: string;
+  newThumb: string;
+  maxPhotos: number;
+  adding: boolean;
+  replaceIndex: number;
+}): ActionResult<{ imageUrls: string[]; thumbUrls: string[]; removeUrls: string[] }> {
+  const imageUrls = [...input.imageUrls];
+  const thumbUrls = imageUrls.map((full, index) => input.thumbUrls[index] || full);
+  const canReplace =
+    Number.isInteger(input.replaceIndex) &&
+    input.replaceIndex >= 0 &&
+    input.replaceIndex < imageUrls.length;
+
+  if (canReplace) {
+    const index = input.replaceIndex;
+    const removeUrls = [imageUrls[index], thumbUrls[index]].filter(Boolean);
+    imageUrls[index] = input.newFull;
+    thumbUrls[index] = input.newThumb;
+    return { ok: true, data: { imageUrls, thumbUrls, removeUrls } };
+  }
+
+  if (imageUrls.length === 0) {
+    return {
+      ok: true,
+      data: { imageUrls: [input.newFull], thumbUrls: [input.newThumb], removeUrls: [] },
+    };
+  }
+
+  if (input.adding) {
+    if (imageUrls.length >= input.maxPhotos) {
+      return { ok: false, error: `這題最多 ${input.maxPhotos} 張` };
+    }
+    return {
+      ok: true,
+      data: {
+        imageUrls: [...imageUrls, input.newFull],
+        thumbUrls: [...thumbUrls, input.newThumb],
+        removeUrls: [],
+      },
+    };
+  }
+
+  if (imageUrls.length === 1) {
+    return {
+      ok: true,
+      data: {
+        imageUrls: [input.newFull],
+        thumbUrls: [input.newThumb],
+        removeUrls: [imageUrls[0], thumbUrls[0]].filter(Boolean),
+      },
+    };
+  }
+
+  return { ok: false, error: "請指定要改哪一張" };
 }
 
 async function resolveLiveUpload(input: { slug: string; taskId: string; teamId: string }) {
@@ -237,10 +317,25 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
 
   let imageUrls = existing?.image_urls ?? [];
   let thumbUrls = existing?.thumb_urls ?? [];
+  let removeUrls: string[] = [];
 
   if (hasNewPhoto) {
-    imageUrls = [supabase.storage.from("submissions").getPublicUrl(fullPath).data.publicUrl];
-    thumbUrls = [supabase.storage.from("submissions").getPublicUrl(thumbPath).data.publicUrl];
+    const applied = applyUploadedPhoto({
+      imageUrls,
+      thumbUrls,
+      newFull: supabase.storage.from("submissions").getPublicUrl(fullPath).data.publicUrl,
+      newThumb: supabase.storage.from("submissions").getPublicUrl(thumbPath).data.publicUrl,
+      maxPhotos: clampMaxPhotos(task.max_photos),
+      adding: String(formData.get("adding") ?? "") === "1",
+      replaceIndex: parseReplaceIndex(formData.get("replaceIndex")),
+    });
+    if (!applied.ok) {
+      await supabase.storage.from("submissions").remove([fullPath, thumbPath]);
+      return applied;
+    }
+    imageUrls = applied.data.imageUrls;
+    thumbUrls = applied.data.thumbUrls;
+    removeUrls = applied.data.removeUrls;
   }
 
   const payload = {
@@ -262,7 +357,7 @@ export async function uploadSubmission(formData: FormData): Promise<ActionResult
       return { ok: false, error: "上傳失敗，再試一次" };
     }
     if (hasNewPhoto) {
-      const oldPaths = [...existing.image_urls, ...existing.thumb_urls]
+      const oldPaths = removeUrls
         .map(storagePathFromPublicUrl)
         .filter((path): path is string => Boolean(path));
       if (oldPaths.length) await supabase.storage.from("submissions").remove(oldPaths);
@@ -313,16 +408,21 @@ export async function touchPresence(
   const { data: event } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
   if (!event) return { ok: false, error: "找不到這個活動" };
 
-  const { error } = await supabase.from("event_participants").upsert(
-    {
-      event_id: event.id,
-      team_id: input.teamId,
-      student_id: studentId,
+  const { data: existing } = await supabase
+    .from("event_participants")
+    .select("id")
+    .eq("event_id", event.id)
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (!existing) return { ok: false, error: "請重新加入組別" };
+
+  const { error } = await supabase
+    .from("event_participants")
+    .update({
       student_name: studentName,
       last_seen_at: new Date().toISOString(),
-    },
-    { onConflict: "event_id,student_id" },
-  );
+    })
+    .eq("id", existing.id);
   if (error) return { ok: false, error: "連線出了問題，再試一次" };
   return { ok: true, data: undefined };
 }
@@ -392,27 +492,33 @@ export async function answerBroadcast(input: {
     (kind === "choice" && options.includes(answer));
   if (!valid) return { ok: false, error: "請選一個答案" };
 
+  const { data: person } = await supabase
+    .from("event_participants")
+    .select("id, team_id")
+    .eq("event_id", broadcast.event_id)
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (!person) return { ok: false, error: "請重新加入組別後再答" };
+  const teamId = person.team_id || input.teamId;
+
   const [{ error }] = await Promise.all([
     supabase.from("broadcast_responses").upsert(
       {
         broadcast_id: broadcast.id,
-        team_id: input.teamId,
+        team_id: teamId,
         student_id: studentId,
         student_name: studentName,
         answer,
       },
       { onConflict: "broadcast_id,student_id" },
     ),
-    supabase.from("event_participants").upsert(
-      {
-        event_id: broadcast.event_id,
-        team_id: input.teamId,
-        student_id: studentId,
+    supabase
+      .from("event_participants")
+      .update({
         student_name: studentName,
         last_seen_at: new Date().toISOString(),
-      },
-      { onConflict: "event_id,student_id" },
-    ),
+      })
+      .eq("id", person.id),
   ]);
   if (error) return { ok: false, error: "送出失敗，再試一次" };
   return { ok: true, data: undefined };
