@@ -7,9 +7,16 @@ import { writeStoredTeam } from "@/lib/team-storage";
 import { Button } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
 import { readRememberedJoin, writeRememberedJoin } from "@/lib/remember";
-import { digitsOnly, finalizeTeamCode } from "@/lib/team-code";
+import { teamLabel } from "@/lib/team-code";
+import type { TeamRow } from "@/lib/types";
 
-export function JoinForm({ slug }: { slug: string }) {
+export function JoinForm({
+  slug,
+  teams,
+}: {
+  slug: string;
+  teams: Pick<TeamRow, "id" | "name" | "code">[];
+}) {
   const router = useRouter();
   const { start, stop } = useNavPending();
   const [code, setCode] = useState("");
@@ -21,15 +28,17 @@ export function JoinForm({ slug }: { slug: string }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const saved = readRememberedJoin(slug);
-      if (saved.code) setCode(saved.code);
+      if (saved.code && teams.some((team) => team.code === saved.code)) setCode(saved.code);
       if (saved.studentId) setStudentId(saved.studentId);
       if (saved.studentName) setStudentName(saved.studentName);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [slug]);
+  }, [slug, teams]);
 
   const ready =
-    finalizeTeamCode(code).length === 2 && studentId.trim().length > 0 && studentName.trim().length > 0;
+    teams.some((team) => team.code === code) &&
+    studentId.trim().length > 0 &&
+    studentName.trim().length > 0;
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -59,18 +68,31 @@ export function JoinForm({ slug }: { slug: string }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" autoComplete="on">
-      <label className="block">
-        <span className="mb-2 block text-xs font-black tracking-[0.2em] text-muted">組別</span>
-        <input
-          value={code}
-          name="team-code"
-          autoComplete="off"
-          onChange={(event) => setCode(digitsOnly(event.target.value).slice(0, 2))}
-          inputMode="numeric"
-          placeholder="01"
-          className="h-16 w-full border-2 border-ink bg-card px-4 text-center text-3xl font-black tracking-[0.4em]"
-        />
-      </label>
+      <fieldset>
+        <legend className="mb-2 block text-xs font-black tracking-[0.2em] text-muted">組別</legend>
+        {teams.length === 0 ? (
+          <p className="border-2 border-ink bg-card px-4 py-5 font-black">老師還沒開組，請稍後再加入。</p>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-2">
+            {teams.map((team) => {
+              const selected = code === team.code;
+              return (
+                <button
+                  key={team.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setCode(team.code)}
+                  className={`min-h-16 border-2 border-ink text-lg font-black active:bg-yellow ${
+                    selected ? "bg-yellow" : "bg-card"
+                  }`}
+                >
+                  {teamLabel(team)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </fieldset>
       <label className="block">
         <span className="mb-2 block text-xs font-black tracking-[0.2em] text-muted">學號</span>
         <input
