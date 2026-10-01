@@ -7,7 +7,7 @@ import { ProgressPie } from "@/components/ProgressPie";
 import { Button, Card } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
 import { isStudentOnline } from "@/lib/broadcast";
-import { membersOfTeam, studentDoneTask, teamTaskProgress } from "@/lib/progress";
+import { membersOfTeam, studentDoneTask, studentTaskRate, teamTaskProgress } from "@/lib/progress";
 import { boardTaskCode, currentTask } from "@/lib/task-utils";
 import { digitsOnly, sanitizeStudentId, teamLabel } from "@/lib/team-code";
 import type { ParticipantRow, TaskRow, TeamRow } from "@/lib/types";
@@ -187,6 +187,11 @@ export function TeamManager({
                 ) : (
                   members.map((person) => {
                     const online = isStudentOnline(person.last_seen_at);
+                    const rate = studentTaskRate(
+                      person.student_id,
+                      released.map((task) => task.id),
+                      submissions,
+                    );
                     return (
                       <div
                         key={person.id}
@@ -201,6 +206,11 @@ export function TeamManager({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-baseline gap-x-2">
                             <span className="font-black">{person.student_name}</span>
+                            {released.length > 0 ? (
+                              <span className="text-xs font-black text-muted">
+                                完成 {rate.done}/{rate.total}・{rate.pct}%
+                              </span>
+                            ) : null}
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {released.length === 0 ? (

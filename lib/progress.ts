@@ -20,6 +20,17 @@ export function studentDoneTask(
   );
 }
 
+export function studentTaskRate(
+  studentId: string,
+  taskIds: string[],
+  submissions: SubmissionBit[],
+) {
+  const total = taskIds.length;
+  const done = taskIds.filter((taskId) => studentDoneTask(submissions, studentId, taskId)).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return { done, total, pct };
+}
+
 export function teamTaskProgress(
   teamId: string,
   taskId: string | null,

@@ -113,3 +113,29 @@ export type BroadcastResponseRow = {
   answer: string;
   created_at: string;
 };
+
+export type SnapshotKind = "roster" | "tasks";
+export type SnapshotSource = "manual" | "daily";
+
+export type RosterSnapshotPerson = {
+  team: string;
+  name: string;
+  studentId: string;
+  done: number;
+  total: number;
+  pct: number;
+};
+
+export type TaskSnapshotItem = {
+  code: string;
+  title: string;
+  prompt: string;
+  status: string;
+  maxPhotos: number;
+};
+
+export type SnapshotListItem = {
+  id: string;
+  source: SnapshotSource;
+  createdAt: string;
+};

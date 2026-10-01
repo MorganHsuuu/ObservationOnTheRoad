@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { SONGSHAN_SEED_TASKS, SONGSHAN_SEED_TEAMS } from "@/lib/seed-tasks";
 import { reassignStudentId, reassignStudentTeam } from "@/lib/student-team";
+import { listSnapshots, readSnapshot, saveManualSnapshot } from "@/lib/snapshots";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { arrangeAfterDraft, arrangeAfterPublish } from "@/lib/task-utils";
 import { finalizeEventPin, finalizeTeamCode, isEventPin, isTeamCode, sanitizeStudentId, teamNameFromCode } from "@/lib/team-code";
@@ -21,6 +22,7 @@ import type {
   BroadcastRow,
   EventStatus,
   ParticipantRow,
+  SnapshotKind,
   TaskStatus,
 } from "@/lib/types";
 
@@ -740,4 +742,47 @@ export async function closeBroadcast(slug: string, broadcastId: string): Promise
     .eq("id", broadcastId);
   if (error) return { ok: false, error: error.message };
   return { ok: true, data: undefined };
+}
+
+async function eventIdForSlug(slug: string) {
+  const supabase = createAdminClient();
+  const { data } = await supabase.from("events").select("id").eq("slug", slug).maybeSingle();
+  return data?.id ?? null;
+}
+
+export async function listEventSnapshots(slug: string, kind: SnapshotKind) {
+  await requireAdmin();
+  const eventId = await eventIdForSlug(slug);
+  if (!eventId) return { ok: false as const, error: "找不到場次" };
+  try {
+    const rows = await listSnapshots(eventId, kind);
+    return { ok: true as const, data: rows };
+  } catch {
+    return { ok: false as const, error: "版本紀錄還沒準備好" };
+  }
+}
+
+export async function readEventSnapshot(slug: string, id: string) {
+  await requireAdmin();
+  const eventId = await eventIdForSlug(slug);
+  if (!eventId) return { ok: false as const, error: "找不到場次" };
+  try {
+    const row = await readSnapshot(eventId, id);
+    if (!row) return { ok: false as const, error: "找不到這筆紀錄" };
+    return { ok: true as const, data: row };
+  } catch {
+    return { ok: false as const, error: "版本紀錄還沒準備好" };
+  }
+}
+
+export async function saveEventSnapshot(slug: string, kind: SnapshotKind) {
+  await requireAdmin();
+  const eventId = await eventIdForSlug(slug);
+  if (!eventId) return { ok: false as const, error: "找不到場次" };
+  try {
+    const result = await saveManualSnapshot(eventId, kind);
+    return { ok: true as const, data: result };
+  } catch {
+    return { ok: false as const, error: "現在記不下來，稍後再試" };
+  }
 }
