@@ -236,6 +236,7 @@ function parseNav(pathname: string, joined: boolean, teacherEventSlug: string | 
 function studentGroups(slug: string, joined: boolean): { title: string; links: MenuLink[] }[] {
   const links: MenuLink[] = [
     { href: `/e/${slug}`, label: "任務板", exact: true },
+    { href: `/e/${slug}/roster`, label: "分組名單" },
     { href: `/e/${slug}/gallery`, label: "成果牆" },
   ];
   if (joined) {
@@ -289,6 +290,7 @@ function hereLabel(pathname: string, slug: string | null) {
   if (pathname === "/admin/events/new") return "新增場次";
   if (slug && pathname === `/e/${slug}`) return "任務板";
   if (slug && pathname === `/e/${slug}/join`) return "加入組別";
+  if (slug && pathname === `/e/${slug}/roster`) return "分組名單";
   if (slug && pathname.startsWith(`/e/${slug}/task/`)) return "任務";
   if (slug && pathname === `/e/${slug}/gallery`) return "成果牆";
   if (slug && pathname === `/show/${slug}`) return "展覽";
