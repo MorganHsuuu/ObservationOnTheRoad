@@ -36,6 +36,7 @@ export function GalleryView({
   const searchParams = useSearchParams();
   const [taskFilter, setTaskFilter] = useState(searchParams.get("task") ?? "all");
   const [teamFilter, setTeamFilter] = useState(searchParams.get("team") ?? "all");
+  const [sortBy, setSortBy] = useState(searchParams.get("sort") === "hearts" ? "hearts" : "new");
   const [openId, setOpenId] = useState(deepLinkId ?? searchParams.get("s"));
   const [likeRows, setLikeRows] = useState(likes);
   const [guestId, setGuestId] = useState("");
@@ -80,14 +81,14 @@ export function GalleryView({
     };
   }, [eventId]);
 
-  function setFilter(key: "task" | "team", value: string) {
-    const nextTask = key === "task" ? value : taskFilter;
-    const nextTeam = key === "team" ? value : teamFilter;
+  function writeFilters(nextTask: string, nextTeam: string, nextSort: string) {
     setTaskFilter(nextTask);
     setTeamFilter(nextTeam);
+    setSortBy(nextSort === "hearts" ? "hearts" : "new");
     const next = new URLSearchParams();
     if (nextTask !== "all") next.set("task", nextTask);
     if (nextTeam !== "all") next.set("team", nextTeam);
+    if (nextSort === "hearts") next.set("sort", "hearts");
     const query = next.toString();
     window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
   }
@@ -102,6 +103,16 @@ export function GalleryView({
     [submissions, teamMap],
   );
 
+  const likeState = useMemo(() => {
+    const counts = new Map<string, number>();
+    const mine = new Set<string>();
+    for (const row of likeRows) {
+      counts.set(row.submission_id, (counts.get(row.submission_id) ?? 0) + 1);
+      if (likerId && row.student_id === likerId) mine.add(row.submission_id);
+    }
+    return { counts, mine };
+  }, [likeRows, likerId]);
+
   const list = useMemo(() => {
     const filtered = labeledAll.filter((item) => {
       const taskOk =
@@ -112,21 +123,18 @@ export function GalleryView({
         teamNumber(item.team?.name) === teamFilter;
       return taskOk && teamOk;
     });
+    if (sortBy === "hearts") {
+      return [...filtered].sort((a, b) => {
+        const diff = (likeState.counts.get(b.id) ?? 0) - (likeState.counts.get(a.id) ?? 0);
+        if (diff !== 0) return diff;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+    }
     if (featuredFirst && taskFilter === "all" && teamFilter === "all") {
       return [...filtered].sort((a, b) => Number(b.is_featured) - Number(a.is_featured));
     }
     return filtered;
-  }, [featuredFirst, labeledAll, taskFilter, teamFilter, tasks]);
-
-  const likeState = useMemo(() => {
-    const counts = new Map<string, number>();
-    const mine = new Set<string>();
-    for (const row of likeRows) {
-      counts.set(row.submission_id, (counts.get(row.submission_id) ?? 0) + 1);
-      if (likerId && row.student_id === likerId) mine.add(row.submission_id);
-    }
-    return { counts, mine };
-  }, [likeRows, likerId]);
+  }, [featuredFirst, labeledAll, likeState.counts, sortBy, taskFilter, teamFilter, tasks]);
 
   const open = list.find((item) => item.id === openId) ?? labeledAll.find((item) => item.id === openId);
 
@@ -165,7 +173,7 @@ export function GalleryView({
           <FilterSelect
             label="任務"
             value={taskFilter}
-            onChange={(value) => setFilter("task", value)}
+            onChange={(value) => writeFilters(value, teamFilter, sortBy)}
           >
             <option value="all">全部任務</option>
             {tasks.map((task) => (
@@ -177,7 +185,7 @@ export function GalleryView({
           <FilterSelect
             label="組別"
             value={teamFilter}
-            onChange={(value) => setFilter("team", value)}
+            onChange={(value) => writeFilters(taskFilter, value, sortBy)}
           >
             <option value="all">全部組別</option>
             {teams.map((team) => (
@@ -185,6 +193,14 @@ export function GalleryView({
                 {teamLabel(team)}
               </option>
             ))}
+          </FilterSelect>
+          <FilterSelect
+            label="排序"
+            value={sortBy}
+            onChange={(value) => writeFilters(taskFilter, teamFilter, value)}
+          >
+            <option value="new">最新</option>
+            <option value="hearts">人氣</option>
           </FilterSelect>
           <p className="ml-auto pb-2 text-[13px] font-medium text-muted">
             <b className="text-[15px] font-black text-ink">{list.length}</b> / {submissions.length} 筆
@@ -194,6 +210,46 @@ export function GalleryView({
 
       {list.length === 0 ? (
         <EmptyState title="這個組合還沒有人回傳" body="換一個任務或組別看看" />
+      ) : sortBy === "hearts" ? (
+        <ol className="mt-7 space-y-3">
+          {list.map((item, index) => (
+            <li key={item.id}>
+              <article
+                className="flex cursor-pointer items-stretch border-2 border-ink bg-card"
+                tabIndex={0}
+                onClick={() => setOpenId(item.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") setOpenId(item.id);
+                }}
+              >
+                <div className="flex w-14 shrink-0 items-center justify-center border-r-2 border-ink bg-yellow text-2xl font-black">
+                  {index + 1}
+                </div>
+                <div className="h-24 w-24 shrink-0 border-r-2 border-ink bg-[#DEDCD4]">
+                  {tinyImage(item) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={tinyImage(item)} alt="" className="h-full w-full object-cover" />
+                  ) : null}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col justify-center px-3.5 py-3">
+                  <p className="text-[11px] font-black tracking-[0.12em] text-muted">
+                    任務 {liveTaskCode(item.task.id, tasks)}・{teamLabel(item.team)}
+                    {item.student_name ? `・${item.student_name}` : ""}
+                  </p>
+                  <p className="mt-1 truncate text-[17px] font-black">{item.caption || "（沒有說明）"}</p>
+                </div>
+                <div className="flex shrink-0 items-center px-3">
+                  <LikeButton
+                    liked={likeState.mine.has(item.id)}
+                    count={likeState.counts.get(item.id) ?? 0}
+                    busy={pendingId === item.id}
+                    onToggle={() => void onLike(item.id)}
+                  />
+                </div>
+              </article>
+            </li>
+          ))}
+        </ol>
       ) : (
         <div className="masonry mt-7">
           {list.map((item) => (
