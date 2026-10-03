@@ -9,7 +9,7 @@ import {
   importTasksFromEvent,
   reorderTasks,
 } from "@/app/actions/admin";
-import { TaskEditor } from "@/components/admin/TaskEditor";
+import { TaskEditor, type TaskDraft } from "@/components/admin/TaskEditor";
 import { Card } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
 import { shortTaskTitle, taskStatusLabel } from "@/lib/task-utils";
@@ -46,10 +46,7 @@ export function TaskManager({
   itemsRef.current = items;
 
   useEffect(() => {
-    if (!busyRef.current) setItems(tasks);
-  }, [tasks]);
-
-  useEffect(() => {
+    setItems(tasks);
     if (!busyRef.current) return;
     stop();
     setBusy(false);
@@ -70,10 +67,28 @@ export function TaskManager({
     router.refresh();
   }
 
-  function afterSave() {
+  function afterSave(draft: TaskDraft) {
     setEditing(null);
-    setBusy(true);
-    start("更新畫面");
+    if (draft.id) {
+      setItems((list) =>
+        list.map((task) =>
+          task.id === draft.id
+            ? {
+                ...task,
+                title: draft.title,
+                prompt_md: draft.prompt_md,
+                hint: draft.hint,
+                requires_caption: draft.requires_caption,
+                max_photos: draft.max_photos,
+              }
+            : task,
+        ),
+      );
+      stop();
+    } else {
+      setBusy(true);
+      start("更新畫面");
+    }
     router.refresh();
   }
 

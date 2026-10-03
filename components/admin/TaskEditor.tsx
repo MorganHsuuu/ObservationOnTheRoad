@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { upsertTask } from "@/app/actions/admin";
 import { Button } from "@/components/ui";
 import { useNavPending } from "@/components/NavigationProvider";
@@ -68,35 +68,37 @@ export function TaskEditor({
     <form onSubmit={onSubmit} className="space-y-3">
       <label className="block">
         <span className="mb-1 block text-xs font-black tracking-[0.2em] text-muted">標題</span>
-        <input
+        <GrowingTextarea
           name="title"
           defaultValue={initial.title ?? ""}
           placeholder="例如：找到一隻兔子"
           required
           disabled={busy}
-          className="h-14 w-full border-2 border-ink bg-card px-3 font-black disabled:opacity-50"
+          singleLine
+          className="min-h-14 px-3 py-3 font-black"
         />
       </label>
       <label className="block">
         <span className="mb-1 block text-xs font-black tracking-[0.2em] text-muted">題目本文</span>
-        <textarea
+        <GrowingTextarea
           name="prompt_md"
           defaultValue={initial.prompt_md ?? ""}
           placeholder="學生會看到的任務說明"
           required
-          rows={5}
           disabled={busy}
-          className="w-full border-2 border-ink bg-card p-3 font-medium disabled:opacity-50"
+          rows={8}
+          className="min-h-52 p-3 font-medium"
         />
       </label>
       <label className="block">
         <span className="mb-1 block text-xs font-black tracking-[0.2em] text-muted">提示（選填）</span>
-        <input
+        <GrowingTextarea
           name="hint"
           defaultValue={initial.hint ?? ""}
           placeholder="不想一次講破可以寫這裡"
           disabled={busy}
-          className="h-12 w-full border-2 border-ink bg-card px-3 disabled:opacity-50"
+          rows={3}
+          className="min-h-24 p-3"
         />
       </label>
       <label className="flex min-h-11 items-center gap-2 font-black">
@@ -126,5 +128,66 @@ export function TaskEditor({
         取消
       </Button>
     </form>
+  );
+}
+
+function GrowingTextarea({
+  name,
+  defaultValue,
+  placeholder,
+  required,
+  disabled,
+  rows = 1,
+  singleLine = false,
+  className = "",
+}: {
+  name: string;
+  defaultValue: string;
+  placeholder: string;
+  required?: boolean;
+  disabled?: boolean;
+  rows?: number;
+  singleLine?: boolean;
+  className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = useCallback((el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+    const bottom = el.getBoundingClientRect().bottom;
+    const scroller = el.closest("[data-scroll-modal]");
+    if (scroller instanceof HTMLElement) {
+      const limit = scroller.getBoundingClientRect().bottom - 16;
+      if (bottom > limit) scroller.scrollTop += bottom - limit;
+      return;
+    }
+    if (bottom > window.innerHeight - 16) {
+      window.scrollBy({ top: bottom - window.innerHeight + 16 });
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (ref.current) fit(ref.current);
+  }, [defaultValue, fit]);
+
+  return (
+    <textarea
+      ref={ref}
+      name={name}
+      defaultValue={defaultValue}
+      placeholder={placeholder}
+      required={required}
+      disabled={disabled}
+      rows={rows}
+      onInput={(event) => {
+        const el = event.currentTarget;
+        if (singleLine) {
+          const next = el.value.replace(/\n/g, "");
+          if (next !== el.value) el.value = next;
+        }
+        fit(el);
+      }}
+      className={`w-full resize-none overflow-hidden border-2 border-ink bg-card text-base leading-relaxed disabled:opacity-50 ${className}`}
+    />
   );
 }

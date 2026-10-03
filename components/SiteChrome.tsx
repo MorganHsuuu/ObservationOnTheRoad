@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { clearStoredTeam, readStoredTeam } from "@/lib/team-storage";
 
 type MenuLink = {
@@ -45,6 +45,13 @@ export function useChromeTools(tools: ChromeTools) {
 
 export function SiteChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [pageBusy, setPageBusy] = useState(false);
+  const refreshPage = useCallback(() => {
+    setPageBusy(true);
+    router.refresh();
+    window.setTimeout(() => setPageBusy(false), 800);
+  }, [router]);
   const [menuPath, setMenuPath] = useState<string | null>(null);
   const [person, setPerson] = useState("");
   const [teacherEventSlug, setTeacherEventSlug] = useState<string | null>(null);
@@ -91,6 +98,8 @@ export function SiteChrome({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   const label = person || title;
+  const onRefresh = tools.onRefresh ?? refreshPage;
+  const refreshBusy = tools.onRefresh ? Boolean(tools.busy) : pageBusy;
 
   return (
     <ToolsCtx.Provider value={{ setTools: setToolsStable }}>
@@ -107,24 +116,22 @@ export function SiteChrome({ children }: { children: ReactNode }) {
           </button>
           <div className="flex min-w-0 flex-1 items-center justify-between">
             <p className="min-w-0 truncate px-3 text-sm font-black">{label}</p>
-            {tools.onRefresh ? (
-              <div className="flex h-11 shrink-0 items-center border-l-2 border-ink">
-                {tools.updatedAt ? (
-                  <span className="px-2.5 text-[11px] font-black tabular-nums text-yellow-deep">
-                    {tools.updatedAt}
-                  </span>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={tools.onRefresh}
-                  disabled={tools.busy}
-                  aria-label="重新整理"
-                  className="flex h-11 w-11 items-center justify-center border-l-2 border-ink text-lg font-black active:bg-card disabled:text-muted"
-                >
-                  {tools.busy ? "…" : "↻"}
-                </button>
-              </div>
-            ) : null}
+            <div className="flex h-11 shrink-0 items-center border-l-2 border-ink">
+              {tools.updatedAt ? (
+                <span className="px-2.5 text-[11px] font-black tabular-nums text-yellow-deep">
+                  {tools.updatedAt}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={refreshBusy}
+                aria-label="重新整理"
+                className="flex h-11 w-11 items-center justify-center border-l-2 border-ink text-lg font-black active:bg-card disabled:text-muted"
+              >
+                {refreshBusy ? "…" : "↻"}
+              </button>
+            </div>
           </div>
         </header>
 

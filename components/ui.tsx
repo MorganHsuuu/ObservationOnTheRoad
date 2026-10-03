@@ -67,14 +67,17 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/90 p-5"
+      className="fixed inset-x-0 top-11 bottom-0 z-[80] flex items-end justify-center bg-ink/90 p-3 sm:items-center sm:p-5"
       role="dialog"
       aria-modal="true"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[90vh] w-full max-w-[440px] overflow-y-auto border-2 border-ink bg-card p-5">
+      <div
+        data-scroll-modal
+        className="max-h-full w-full max-w-[560px] overflow-y-auto border-2 border-ink bg-card p-4 sm:p-5"
+      >
         {kicker ? (
           <div className="text-xs font-black tracking-[0.2em] text-muted">{kicker}</div>
         ) : null}
